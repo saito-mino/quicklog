@@ -86,8 +86,8 @@ textarea.big{min-height:170px}
 .selrow button.on{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:700}
 .selrow button.on.io-in{background:var(--ok);border-color:var(--ok)}
 .selrow button.on.io-out{background:var(--danger);border-color:var(--danger)}
-.selrow button.on.prio-a{background:var(--danger);border-color:var(--danger)}
-.selrow button.on.prio-b{background:#D9A400;border-color:#D9A400}
+.selrow button.on.prio-a{background:#E0AA00;border-color:#E0AA00;color:#232A35}
+.selrow button.on.prio-b{background:#7B5EA7;border-color:#7B5EA7}
 .selrow button.addopt{border:1px dashed var(--sub);background:none;color:var(--sub);padding:8px 12px}
 /* 時間ワンタップ */
 .minrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
@@ -109,6 +109,9 @@ textarea.big{min-height:170px}
 .toolbar{display:flex;gap:8px;margin:18px 0 10px}
 .toolbar input{flex:1}
 .copyall{flex:0 0 auto;border:1px solid var(--line);background:var(--card);border-radius:8px;padding:0 14px;font-size:.85rem;cursor:pointer;color:var(--ink);font-family:inherit}
+.filterrow{display:flex;gap:6px;margin:0 0 8px;flex-wrap:wrap}
+.fbtn{border:1px solid var(--line);background:var(--card);border-radius:16px;padding:5px 14px;font-size:.82rem;cursor:pointer;color:var(--sub);font-family:inherit}
+.fbtn.on{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:700}
 .hint{font-size:.72rem;color:var(--sub);margin-bottom:10px;padding:0 2px}
 .timeline{display:flex;flex-direction:column;gap:10px}
 .rec{display:flex;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;cursor:pointer}
@@ -120,8 +123,8 @@ textarea.big{min-height:170px}
 .badge{font-size:.68rem;border:1px solid var(--line);border-radius:10px;padding:0 8px;color:var(--sub);background:#F6F7F5}
 .badge.bred{color:#fff;border-color:var(--danger);background:var(--danger);font-weight:700}
 .badge.bgreen{color:#fff;border-color:var(--ok);background:var(--ok);font-weight:700}
-.badge.pa{color:#fff;border-color:var(--danger);background:var(--danger);font-weight:700}
-.badge.pb{color:#232A35;border-color:#D9A400;background:#F2CE55;font-weight:700}
+.badge.pa{color:#232A35;border-color:#E0AA00;background:#F2CE55;font-weight:700}
+.badge.pb{color:#fff;border-color:#7B5EA7;background:#7B5EA7;font-weight:700}
 .rec .txt{font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
 .amt-in{color:var(--ok);font-weight:700}
 .amt-out{color:var(--danger);font-weight:700}
@@ -201,6 +204,11 @@ body.editmode .gtab.active .del{display:inline}
   <div class="toolbar">
     <input type="text" id="searchBox" placeholder="キーワード検索(名前・内容・種別・ステータス等)" oninput="renderTimeline()">
     <button class="copyall" onclick="copyAll()">全件コピー</button>
+  </div>
+  <div class="filterrow">
+    <button class="fbtn" id="fb_urg" onclick="toggleUrg()">緊急</button>
+    <button class="fbtn" id="fb_imp" onclick="toggleImp()">重要</button>
+    <button class="fbtn" id="fb_done" onclick="toggleDone()">完了を含む</button>
   </div>
   <div class="hint">※ スペース区切りでAND検索(例:「物件 中村」=物件の中の中村様)。「未請求」「未完了」「緊急」などでも絞れます。検索中に「全件コピー」を押すと絞り込んだ結果だけをコピー(AI貼り付け用)</div>
 
@@ -1110,6 +1118,24 @@ function entryValues(e){
   });
   return vals;
 }
+let urgOn=false,impOn=false,showDone=false;
+function toggleUrg(){urgOn=!urgOn;paintFilters();renderTimeline()}
+function toggleImp(){impOn=!impOn;paintFilters();renderTimeline()}
+function toggleDone(){showDone=!showDone;paintFilters();renderTimeline()}
+function paintFilters(){
+  const set=(id,on)=>{const el=document.getElementById(id);if(el)el.className='fbtn'+(on?' on':'')};
+  set('fb_urg',urgOn);
+  set('fb_imp',impOn);
+  set('fb_done',showDone);
+}
+function passFilters(e){
+  const d=e.data||{};
+  if(!showDone&&d.doneStat==='完了')return false;
+  const p=Array.isArray(d.prio)?d.prio:[];
+  if(urgOn&&!p.includes('緊急'))return false;
+  if(impOn&&!p.includes('重要'))return false;
+  return true;
+}
 function matches(e,q){
   const hay=[catName(e.cat),...entryValues(e)].join(' ');
   return q.split(/[\s\u3000]+/).filter(Boolean).every(t=>hay.includes(t));
@@ -1154,8 +1180,8 @@ function summaryHTML(e){
 function renderTimeline(){
   const q=document.getElementById('searchBox').value.trim();
   const el=document.getElementById('timeline');el.innerHTML='';
-  const list=entries.filter(e=>!q||matches(e,q));
-  if(!list.length){el.innerHTML='<div class="empty-timeline">記録がありません</div>';return}
+  const list=entries.filter(passFilters).filter(e=>!q||matches(e,q));
+  if(!list.length){el.innerHTML='<div class="empty-timeline">表示できる記録がありません(完了分は「完了を含む」で表示されます)</div>';return}
   list.forEach(e=>{
     const s=summaryHTML(e);
     const d=document.createElement('div');d.className='rec';
@@ -1235,7 +1261,7 @@ function deleteOne(){
 }
 function copyAll(){
   const q=document.getElementById('searchBox').value.trim();
-  const list=entries.filter(e=>!q||matches(e,q));
+  const list=entries.filter(passFilters).filter(e=>!q||matches(e,q));
   if(!list.length){toast('コピーする記録がありません');return}
   const text=list.map(entryText).join('\n----------------------------------------\n');
   copyText(text,q?`検索結果 ${list.length}件をコピーしました`:`全 ${list.length}件をコピーしました`);
