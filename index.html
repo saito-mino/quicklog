@@ -49,7 +49,7 @@ body.editmode .tab-add{display:block}
 
 /* 入力カード */
 .entrycard{background:var(--card);border:1px solid var(--line);border-top:3px solid var(--ink);border-radius:0 var(--radius) var(--radius) var(--radius);padding:16px 16px 14px;position:relative;z-index:1}
-.field{margin-bottom:12px}
+.field{margin-bottom:10px}
 .field label{display:block;font-size:.72rem;color:var(--sub);letter-spacing:.08em;margin-bottom:3px}
 input[type=text],input[type=number],textarea,select{
   border:1px solid var(--line);border-radius:8px;background:#FCFCFB;
@@ -58,8 +58,20 @@ input[type=text],input[type=number],textarea{width:100%}
 input:focus,textarea:focus,select:focus{outline:2px solid var(--focus);outline-offset:-1px;border-color:var(--focus)}
 textarea{resize:vertical;min-height:66px}
 textarea.big{min-height:170px}
-.date6{width:130px !important;letter-spacing:.12em}
+.date6{width:110px !important;letter-spacing:.08em}
 .date6.bad{border-color:var(--danger);outline-color:var(--danger)}
+.row2{display:flex;gap:10px;flex-wrap:wrap}
+.row2 .field{flex:1;min-width:0}
+.row2 label{white-space:nowrap}
+.row2 .selrow{flex-wrap:nowrap}
+.row2 .selrow button{padding:6px 8px;font-size:.8rem;white-space:nowrap}
+.row2 .date6{width:100% !important;min-width:0}
+.row2.tight{gap:8px}
+.row2.tight .field{flex:0 1 auto;margin-bottom:8px}
+.row2.tight label{font-size:.62rem;margin-bottom:2px}
+.row2.tight .date6{width:84px !important;padding:7px 6px;font-size:14px;letter-spacing:.05em}
+.row2.tight .statline{gap:8px}
+.row2.tight .statline select{padding:7px 8px;font-size:.85rem;min-width:0}
 .datepreview{font-size:.72rem;color:var(--sub);margin-left:10px}
 .personbtn{width:100%;text-align:left;border:1px solid var(--line);border-radius:8px;background:#FCFCFB;padding:9px 10px;font-size:16px;cursor:pointer;color:var(--ink);font-family:inherit}
 .personbtn.empty{color:#A9AFB9}
@@ -74,6 +86,8 @@ textarea.big{min-height:170px}
 .selrow button.on{background:var(--ink);color:#fff;border-color:var(--ink);font-weight:700}
 .selrow button.on.io-in{background:var(--ok);border-color:var(--ok)}
 .selrow button.on.io-out{background:var(--danger);border-color:var(--danger)}
+.selrow button.on.prio-a{background:var(--danger);border-color:var(--danger)}
+.selrow button.on.prio-b{background:#D9A400;border-color:#D9A400}
 .selrow button.addopt{border:1px dashed var(--sub);background:none;color:var(--sub);padding:8px 12px}
 /* 時間ワンタップ */
 .minrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
@@ -84,7 +98,7 @@ textarea.big{min-height:170px}
 .statline{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
 .statline .sl{min-width:0}
 .statline label{display:block;font-size:.7rem;color:var(--sub);letter-spacing:.08em;margin-bottom:3px}
-.statline select{padding:8px 10px;font-size:.95rem;font-weight:700;border-radius:8px;cursor:pointer;color:#fff;min-width:120px}
+.statline select{padding:8px 10px;font-size:.92rem;font-weight:700;border-radius:8px;cursor:pointer;color:#fff;min-width:0}
 .statline select.neg{background:var(--danger);border-color:var(--danger)}
 .statline select.pos{background:var(--ok);border-color:var(--ok)}
 .statline select option{background:#fff;color:var(--ink);font-weight:400}
@@ -106,6 +120,8 @@ textarea.big{min-height:170px}
 .badge{font-size:.68rem;border:1px solid var(--line);border-radius:10px;padding:0 8px;color:var(--sub);background:#F6F7F5}
 .badge.bred{color:#fff;border-color:var(--danger);background:var(--danger);font-weight:700}
 .badge.bgreen{color:#fff;border-color:var(--ok);background:var(--ok);font-weight:700}
+.badge.pa{color:#fff;border-color:var(--danger);background:var(--danger);font-weight:700}
+.badge.pb{color:#232A35;border-color:#D9A400;background:#F2CE55;font-weight:700}
 .rec .txt{font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
 .amt-in{color:var(--ok);font-weight:700}
 .amt-out{color:var(--danger);font-weight:700}
@@ -248,6 +264,16 @@ body.editmode .gtab.active .del{display:inline}
   </div>
 </div>
 
+<!-- 案件ピッカー -->
+<div class="overlay" id="ankenOverlay" onclick="if(event.target===this)closeAnkenPicker()">
+  <div class="sheet">
+    <h3><span>案件を選択</span><button class="closebtn" onclick="closeAnkenPicker()">×</button></h3>
+    <input type="text" id="ankenSearch" placeholder="案件を検索" oninput="renderAnkenList()" style="margin-bottom:12px">
+    <div class="plist" id="ankenList"></div>
+    <div class="paddrow"><button style="flex:1" onclick="pickAnken('')">紐づけを解除(なし)</button></div>
+  </div>
+</div>
+
 <!-- 合言葉入力(初回のみ) -->
 <div class="dlg-overlay" id="keyOverlay">
   <div class="dlg">
@@ -271,7 +297,7 @@ const PALETTE=['#3B6FB5','#7B5EA7','#5F7F5F','#9E5E8A','#A84A3B','#4E6E9E','#8A7
 
 /* =============== 同期レイヤー(GAS+スプレッドシート) =============== */
 const GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
-const LS_KEY='ql_key', LS_CACHE='ql_cache_v1', LS_OUTBOX='ql_outbox_v1';
+const LS_KEY='ql_key', LS_CACHE='ql_cache_v5', LS_OUTBOX='ql_outbox_v1';
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 let apiKey=lsGet(LS_KEY)||'';
@@ -283,7 +309,12 @@ function saveLocal(){
 }
 function loadLocal(){
   try{
-    const c=JSON.parse(lsGet(LS_CACHE)||'null');
+    let c=JSON.parse(lsGet(LS_CACHE)||'null');
+    if(!c){
+      /* 旧バージョンのキャッシュから記録・人物リストだけ引き継ぐ(タブ構成は新定義を使う) */
+      const old=JSON.parse(lsGet('ql_cache_v4')||lsGet('ql_cache_v3')||lsGet('ql_cache_v1')||'null');
+      if(old)c={entries:old.entries,groups:old.groups,recentPeople:old.recentPeople};
+    }
     if(c){
       if(Array.isArray(c.entries))entries=c.entries;
       if(Array.isArray(c.cats)&&c.cats.length)cats=c.cats;
@@ -292,12 +323,39 @@ function loadLocal(){
     }
   }catch(e){}
 }
+/* ---- 一括改修v3の自動移行 ---- */
+function migrate(){
+  const ren={'行政書士':'行政','宅建業':'宅建','他士業':'士業','法人顧客':'法人','個人顧客':'個人'};
+  let g=false;
+  groups.forEach(x=>{if(ren[x.name]){x.name=ren[x.name];g=true}});
+  if(g)cfgSync();
+  entries.forEach(en=>{
+    if(en.cat==='bukken'&&!en.data.deal)en.data.deal='買い';
+    if(en.cat==='risk'){
+      en.cat='task';
+      const d=en.data;
+      d.doneStat=(d.status==='対応済')?'完了':'未完了';
+      if(d.doneStat==='完了'&&!d.doneDate)d.doneDate=d.date||today6();
+      d.content=[d.content,d.idea].filter(Boolean).join('\n');
+      delete d.status;delete d.idea;
+    }
+    const d=en.data;
+    /* 廃止した備考の中身を内容欄へ併合(見えなくならないように) */
+    if(['task','anken','shukan'].includes(en.cat)&&d.note){d.content=[d.content,d.note].filter(Boolean).join('\n');delete d.note}
+    if(['jikan','shushi'].includes(en.cat)&&d.note){d.content=[d.content,d.note].filter(Boolean).join(' / ');delete d.note}
+    if(en.cat==='bukken'&&d.note){d.free=[d.free,d.note].filter(Boolean).join('\n');delete d.note}
+    /* 旧A〜D区分を緊急・重要フラグへ変換 */
+    if(typeof d.prio==='string'){
+      d.prio=({'A群':['緊急','重要'],'B群':['緊急'],'C群':['重要'],'D群':[]})[d.prio]||[];
+    }
+  });
+}
 function updStat(msg){
   const el=document.getElementById('syncStat');if(!el)return;
   el.textContent=msg||(outbox.length?('送信待ち '+outbox.length+'件'):'同期済み');
 }
 let flushing=false;
-function enqueue(op){outbox.push(op);saveLocal();updStat();flush()}
+function enqueue(op,defer){outbox.push(op);saveLocal();updStat();if(!defer)flush()}
 async function flush(){
   if(flushing||!outbox.length||!apiKey)return;
   flushing=true;
@@ -313,27 +371,67 @@ async function flush(){
   }
   flushing=false;updStat();
 }
+const OTHER_LABEL={engage:'区分',source:'経路',scope:'守備範囲',delegate:'依頼先',introducers:'紹介者',budget:'予算',area:'エリア',zoning:'用途地域',size:'広さ・坪数',youto:'用途',idea:'対策',free:'自由記述',deal:'売買',prio:'区分',anken:'案件',est:'設立日',fiscal:'決算期',capital:'資本金',shares:'株式数',permits:'許認可',aoiro:'申告',kazei:'消費税',honsoku:'課税方式',sales1:'売上2期前',sales2:'売上前期',sales3:'売上当期予想',bd1:'誕生日①',bd2:'誕生日②',bd3:'誕生日③',ng1:'年賀状①',ng2:'年賀状②',ng3:'年賀状③',sm1:'暑中①',sm2:'暑中②',sm3:'暑中③'};
+function oLabel(f){return OTHER_LABEL[f.k]||String(f.label||f.k).replace(/[(（].*$/,'').trim()}
 function colsOf(e){
   const fs=catFields(e.cat),d=e.data;
-  const persons=fs.filter(f=>f.type==='person'&&d[f.k]).map(f=>d[f.k]);
-  fs.filter(f=>f.type==='personlist').forEach(f=>{(d[f.k]||[]).forEach(n=>persons.push(n))});
-  const stats=[];
+  const c={tab:catName(e.cat),date:iso6(d.date||''),kind:'',partner:'',content:'',note:'',amount:'',done:'',doneDate:'',bill:'',payDate:'',other:''};
+  const others=[];
+  const oneline=v=>String(v).replace(/\s*\n+\s*/g,' / ');
   fs.forEach(f=>{
-    if(f.type==='select'&&d[f.k])stats.push(d[f.k]);
-    if(f.type==='statline'&&d[f.sk])stats.push(d[f.sk]);
+    const v=d[f.k];
+    switch(f.type){
+      case 'person':
+        if(f.k==='partner'){c.partner=v||''}
+        else if(v){others.push(oLabel(f)+': '+v)}
+        break;
+      case 'ankenlink':
+        if(v)others.push('案件: '+v);
+        break;
+      case 'personlist':
+        if(v&&v.length)others.push(oLabel(f)+': '+v.join('、'));
+        break;
+      case 'select':
+        if(f.k==='kind'||f.k==='io'){c.kind=(v&&v!=='未設定')?v:''}
+        else if(f.k==='status'){c.done=v||''}
+        else if(v){others.push(oLabel(f)+': '+v)}
+        break;
+      case 'flags':
+        if(Array.isArray(v)&&v.length)others.push('区分: '+v.join('・'));
+        break;
+      case 'statline':
+        if(f.k==='done'){c.done=d[f.sk]||'';c.doneDate=iso6(d[f.dk]||'')}
+        else if(f.k==='bill'){c.bill=d[f.sk]||'';c.payDate=iso6(d[f.dk]||'')}
+        break;
+      case 'amount':
+        if(f.k==='amount')c.amount=(v!==''&&v!==undefined)?v:'';
+        else if(v!==''&&v!==undefined&&v!==null)others.push(oLabel(f)+': ¥'+Number(v).toLocaleString('ja-JP'));
+        break;
+      case 'minutes':
+        if(v)others.push('所要時間: '+fmtMin(v));
+        break;
+      case 'seconds':
+        if(v)others.push('秒数: '+v+'秒');
+        break;
+      case 'date6o':
+        if(valid6(v||''))others.push(oLabel(f)+': '+iso6(v));
+        break;
+      case 'text': case 'textarea': case 'bigtext':
+        if(f.main){c.content=oneline(v||'')}
+        else if(f.k==='note'){c.note=oneline(v||'')}
+        else if(v){others.push(oLabel(f)+': '+oneline(v))}
+        break;
+    }
   });
-  const mainF=fs.find(f=>f.main);
-  return {tab:catName(e.cat),date:iso6(d.date||''),partner:persons.join('、'),
-    content:String((mainF?d[mainF.k]:d.content)||''),
-    amount:(d.amount!==undefined&&d.amount!=='')?d.amount:'',
-    status:stats.join(' / '),detail:entryText(e)};
+  c.other=others.join(' / ');
+  return c;
 }
 function pushEntryOp(e){enqueue({action:'save',entry:e,cols:colsOf(e)})}
 let cfgTimer=null;
 function cfgSync(){
   clearTimeout(cfgTimer);
   cfgTimer=setTimeout(()=>{
-    enqueue({action:'config',name:'cats',value:cats});
+    enqueue({action:'config',name:'cats4',value:cats});
     enqueue({action:'config',name:'groups',value:groups});
     enqueue({action:'config',name:'recent',value:recentPeople});
   },1200);
@@ -347,6 +445,10 @@ async function fetchAll(){
     if(j&&j.error==='unauthorized'){apiKey='';lsSet(LS_KEY,'');showKeyScreen('合言葉が違います。もう一度入力してください');updStat('未接続');return}
     if(!j||!j.ok)throw 0;
     let sv=j.entries||[];
+    const localPrev=entries.slice();
+    let resend=false;
+    /* 空サーバ保護: シート作り直し直後は手元の記録を正として自動復元する */
+    if(sv.length===0&&localPrev.length>0){sv=localPrev.slice();resend=true}
     outbox.filter(o=>o.action==='save').forEach(o=>{
       const i=sv.findIndex(x=>String(x.id)===String(o.entry.id));
       if(i>=0)sv[i]=o.entry;else sv.push(o.entry);
@@ -355,9 +457,15 @@ async function fetchAll(){
     sv.sort((a,b)=>(b.ts||0)-(a.ts||0));
     entries=sv;
     if(j.config){
-      if(Array.isArray(j.config.cats)&&j.config.cats.length)cats=j.config.cats;
+      if(Array.isArray(j.config.cats4)&&j.config.cats4.length)cats=j.config.cats4;
       if(Array.isArray(j.config.groups)&&j.config.groups.length)groups=j.config.groups;
       if(Array.isArray(j.config.recent))recentPeople=j.config.recent;
+    }
+    migrate();
+    /* 新しい列形式への一斉再送(初回のみ。schemaマーカーで判定) */
+    if(resend||!j.config||j.config.schema!==4){
+      entries.forEach(en=>enqueue({action:'save',entry:en,cols:colsOf(en)},true));
+      enqueue({action:'config',name:'schema',value:4},true);
     }
     if(!cats.find(c=>c.id===activeCat))activeCat=cats[0].id;
     if(!groups.find(g=>g.id===activeGroup))activeGroup=groups[0].id;
@@ -395,73 +503,93 @@ document.addEventListener('keydown',function(e){
 
 
 let cats=[
- {id:'task',name:'タスク',color:'#3B6FB5',fields:[
-   {k:'done',label:'完了ステータス',type:'statline',sk:'doneStat',options:['未完了','完了'],dk:'doneDate',dlabel:'完了日(6桁)',autoDate:true},
-   {k:'date',label:'発生日',type:'date6'},
-   {k:'kind',label:'種別',type:'select',extendable:true,
-     options:['自由記入','報告','連絡','相談','お礼','電話','問合せ','見積','調査','受領']},
+ {id:'task',name:'タスク',color:'#2C4A73',text:'#fff',fields:[
+   {k:'date',label:'発生日',type:'date6',row:'h1'},
+   {k:'done',label:'完了',type:'statline',sk:'doneStat',options:['未完了','完了'],dk:'doneDate',dlabel:'完了日',autoDate:true,row:'h1'},
    {k:'partner',label:'相手方',type:'person'},
-   {k:'content',label:'内容',type:'textarea',ph:'内容をパパッと書く',main:1,bigIf:{k:'kind',v:'自由記入'}},
-   {k:'note',label:'備考',type:'textarea',ph:'メモ(任意)'}]},
- {id:'shushi',name:'収支',color:'#7B5EA7',fields:[
+   {k:'anken',label:'案件に紐づけ(任意)',type:'ankenlink'},
+   {k:'prio',label:'区分(再タップで解除)',type:'flags',options:['緊急','重要'],cls:{'緊急':'prio-a','重要':'prio-b'}},
+   {k:'content',label:'内容',type:'bigtext',ph:'内容をパパッと書く',main:1}]},
+ {id:'shushi',name:'収支',color:'#1F5C40',text:'#fff',fields:[
    {k:'date',label:'日付',type:'date6'},
    {k:'io',label:'収入 / 支出',type:'select',options:['収入','支出'],def:'支出',cls:{'収入':'io-in','支出':'io-out'}},
    {k:'amount',label:'金額(円)',type:'amount',main:1},
-   {k:'content',label:'内容',type:'text',ph:'何のお金か'},
-   {k:'note',label:'備考',type:'textarea',ph:'メモ(任意)'}]},
- {id:'jikan',name:'時間',color:'#5F7F5F',fields:[
+   {k:'content',label:'内容',type:'text',ph:'何のお金か'}]},
+ {id:'jikan',name:'時間',color:'#5C4326',text:'#fff',fields:[
    {k:'date',label:'日付',type:'date6'},
-   {k:'content',label:'作業内容',type:'text',ph:'例:更新申請の書類作成',main:1},
-   {k:'minutes',label:'所要時間',type:'minutes'},
-   {k:'note',label:'備考',type:'textarea',ph:'時間がかかった原因など(任意)'}]},
- {id:'shukan',name:'習慣',color:'#2E8B8B',fields:[
+   {k:'content',label:'内容(タイトル)',type:'text',ph:'例:更新申請の書類作成',main:1},
+   {k:'minutes',label:'所要時間',type:'minutes'}]},
+ {id:'shukan',name:'習慣',color:'#4A3A6B',text:'#fff',fields:[
    {k:'date',label:'日付',type:'date6'},
-   {k:'kind',label:'内容',type:'select',extendable:true,options:['DASH','節約']},
+   {k:'kind',label:'種類',type:'select',extendable:true,options:['DASH','節約']},
    {k:'seconds',label:'秒数',type:'seconds',showIf:{k:'kind',v:'DASH'}},
    {k:'amount',label:'節約額(円)',type:'amount',showIf:{k:'kind',v:'節約'}},
-   {k:'note',label:'備考',type:'textarea',ph:'メモ(任意)'}]},
- {id:'anken',name:'案件',color:'#9E5E8A',fields:[
-   {k:'bill',label:'請求ステータス',type:'statline',sk:'billStat',options:['未請求','請求済み'],dk:'payDate',dlabel:'入金日(6桁)',autoDate:false},
-   {k:'done',label:'完了ステータス',type:'statline',sk:'doneStat',options:['未完了','完了'],dk:'doneDate',dlabel:'完了日(6桁)',autoDate:true},
-   {k:'date',label:'発生日',type:'date6'},
+   {k:'content',label:'内容',type:'textarea',ph:'メモ(任意)',main:1}]},
+ {id:'anken',name:'案件',color:'#E3D5EE',text:'#232A35',fields:[
+   {k:'bill',label:'請求',type:'statline',sk:'billStat',options:['未請求','請求済み'],dk:'payDate',dlabel:'入金日',autoDate:false,row:'h1'},
+   {k:'done',label:'完了',type:'statline',sk:'doneStat',options:['未完了','完了'],dk:'doneDate',dlabel:'完了日',autoDate:true,row:'h1'},
+   {k:'date',label:'発生日',type:'date6',row:'h1'},
    {k:'partner',label:'相手方',type:'person'},
-   {k:'content',label:'案件内容',type:'textarea',ph:'受けた仕事の内容',main:1},
+   {k:'amount',label:'金額・報酬(円)',type:'amount'},
+   {k:'content',label:'内容',type:'textarea',ph:'受けた仕事の内容',main:1},
+   {k:'prio',label:'区分(再タップで解除)',type:'flags',options:['緊急','重要'],cls:{'緊急':'prio-a','重要':'prio-b'}},
    {k:'engage',label:'スポット / 継続',type:'select',options:['スポット','継続'],hint:'スポット=高く厳しく / 継続=緩く安く'},
    {k:'source',label:'紹介 / 直接',type:'select',options:['紹介','直接']},
    {k:'introducers',label:'紹介者(＋で複数追加できます)',type:'personlist',showIf:{k:'source',v:'紹介'}},
    {k:'scope',label:'守備範囲か?',type:'select',options:['自分でやる','範囲外']},
-   {k:'delegate',label:'誰にお願いするか(＋で複数追加できます)',type:'personlist',showIf:{k:'scope',v:'範囲外'}},
-   {k:'amount',label:'金額・報酬(円)',type:'amount'},
-   {k:'note',label:'備考',type:'textarea',ph:'メモ(任意)'}]},
- {id:'risk',name:'要対応',color:'#A84A3B',fields:[
-   {k:'date',label:'発生日',type:'date6'},
-   {k:'content',label:'内容',type:'textarea',ph:'例:経理業務に税理士がついていない',main:1},
-   {k:'idea',label:'対策アイデア',type:'bigtext',ph:'解決アイデアをいろいろ書く欄'},
-   {k:'status',label:'ステータス',type:'select',options:['未対応','検討中','対応済']}]},
- {id:'bukken',name:'物件',color:'#4E6E9E',fields:[
-   {k:'date',label:'依頼日',type:'date6'},
-   {k:'partner',label:'依頼者(買主・借主)',type:'person'},
+   {k:'delegate',label:'誰にお願いするか(＋で複数追加できます)',type:'personlist',showIf:{k:'scope',v:'範囲外'}}]},
+ {id:'bukken',name:'物件',color:'#CFE2F3',text:'#232A35',fields:[
+   {k:'done',label:'完了',type:'statline',sk:'doneStat',options:['未完了','完了'],dk:'doneDate',dlabel:'完了日',autoDate:true,row:'h1'},
+   {k:'date',label:'依頼日',type:'date6',row:'h1'},
+   {k:'deal',label:'売り / 買い',type:'select',options:['売り','買い'],def:'買い'},
+   {k:'partner',label:'依頼者(売主・買主・借主)',type:'person'},
+   {k:'anken',label:'案件に紐づけ(任意)',type:'ankenlink'},
    {k:'budget',label:'予算',type:'text',ph:'例:3000万円まで / 家賃15万円まで'},
    {k:'area',label:'希望エリア',type:'text',ph:'例:福岡市東区・新宮町'},
    {k:'zoning',label:'用途地域',type:'text',ph:'例:一低住は避けたい、準工OK'},
    {k:'size',label:'広さ・坪数',type:'text',ph:'例:土地50坪以上'},
    {k:'youto',label:'用途',type:'text',ph:''},
-   {k:'kind',label:'種別',type:'select',options:['戸建','土地','区分','収益','テナント','ビル','ホテル','その他']},
-   {k:'free',label:'自由記述',type:'bigtext',ph:'統一感なくパパッと書く欄。日当たり重視、二世帯も検討、犬を飼う…',main:1},
-   {k:'note',label:'備考',type:'textarea',ph:'メモ(任意)'}]},
- {id:'genkin',name:'残高',color:'#8A7A3B',fields:[
+   {k:'kind',label:'種別',type:'select',options:['未設定','戸建','土地','区分','収益','テナント','ビル','ホテル','その他'],def:'未設定'},
+   {k:'free',label:'自由記述',type:'bigtext',ph:'統一感なくパパッと書く欄',main:1}]},
+ {id:'genkin',name:'残高',color:'#F1E5C2',text:'#232A35',fields:[
    {k:'date',label:'いつ時点',type:'date6'},
    {k:'amount',label:'現金残高(円)',type:'amount',main:1},
    {k:'note',label:'備考',type:'textarea',ph:'メモ(任意)'}]},
+ {id:'houjin',name:'法人',color:'#D6EBDC',text:'#232A35',fields:[
+   {k:'partner',label:'顧客名(法人)',type:'person'},
+   {k:'sales1',label:'売上:2期前(円)',type:'amount',row:'s'},
+   {k:'sales2',label:'売上:前期(円)',type:'amount',row:'s'},
+   {k:'sales3',label:'売上:当期予想(円)',type:'amount',row:'s'},
+   {k:'est',label:'設立日',type:'text',ph:'例:1998-04-01',row:'e'},
+   {k:'fiscal',label:'決算期',type:'text',ph:'例:3月',row:'e'},
+   {k:'capital',label:'資本金(円)',type:'amount',row:'c'},
+   {k:'shares',label:'株式数',type:'text',ph:'例:100株',row:'c'},
+   {k:'permits',label:'許認可',type:'text',ph:'例:建設業(般-6)第○号、宅建業…'},
+   {k:'aoiro',label:'申告',type:'select',options:['青色','白色'],row:'t'},
+   {k:'kazei',label:'消費税',type:'select',options:['課税事業者','免税事業者'],row:'t'},
+   {k:'honsoku',label:'課税方式',type:'select',options:['本則課税','簡易課税'],row:'t'},
+   {k:'note',label:'備考',type:'textarea',ph:'メモ(任意)'}]},
+ {id:'kojin',name:'個人',color:'#F6DCE2',text:'#232A35',fields:[
+   {k:'partner',label:'誰か',type:'person'},
+   {k:'bd1',label:'誕生日に送った日①',type:'date6o',row:'b'},
+   {k:'bd2',label:'②',type:'date6o',row:'b'},
+   {k:'bd3',label:'③',type:'date6o',row:'b'},
+   {k:'ng1',label:'年賀状を送った日①',type:'date6o',row:'n'},
+   {k:'ng2',label:'②',type:'date6o',row:'n'},
+   {k:'ng3',label:'③',type:'date6o',row:'n'},
+   {k:'sm1',label:'暑中見舞いを送った日①',type:'date6o',row:'m'},
+   {k:'sm2',label:'②',type:'date6o',row:'m'},
+   {k:'sm3',label:'③',type:'date6o',row:'m'},
+   {k:'note',label:'備考',type:'textarea',ph:'好み・メモ(任意)'}]},
 ];
 let activeCat='task';
 
 let groups=[
- {id:'g1',name:'行政書士',members:[]},
- {id:'g2',name:'宅建業',members:[]},
- {id:'g3',name:'他士業',members:[]},
- {id:'g4',name:'法人顧客',members:[]},
- {id:'g5',name:'個人顧客',members:[]},
+ {id:'g1',name:'行政',members:[]},
+ {id:'g2',name:'宅建',members:[]},
+ {id:'g3',name:'士業',members:[]},
+ {id:'g4',name:'法人',members:[]},
+ {id:'g5',name:'個人',members:[]},
  {id:'g6',name:'その他',members:[]},
 ];
 let recentPeople=[];
@@ -536,7 +664,8 @@ function renderTabs(){
     const b=document.createElement('button');
     b.className='tab'+(c.id===activeCat?' active':'');
     b.style.background=c.color;
-    b.innerHTML=`${esc(c.name)}<span class="del" data-del="1">×</span>`;
+    b.style.color=c.text||'#fff';
+    b.innerHTML=`${esc(c.name)}<span class="del" data-del="1" style="color:${(c.text==='#fff')?'#FFD9D9':'#B34A4A'}">×</span>`;
     b.onclick=(e)=>{
       if(e.target.dataset.del){removeCat(c.id);return}
       if(document.body.classList.contains('editmode')&&c.id===activeCat){renameCat(c.id);return}
@@ -547,9 +676,10 @@ function renderTabs(){
   const add=document.createElement('button');
   add.className='tab-add';add.textContent='＋ボタン追加';add.onclick=addCat;
   el.appendChild(add);
-  const cc=catOf(activeCat).color;
-  document.getElementById('saveBtn').style.background=cc;
-  document.getElementById('entrycard').style.borderTopColor=cc;
+  const cc=catOf(activeCat);
+  const sb=document.getElementById('saveBtn');
+  sb.style.background=cc.color;sb.style.color=cc.text||'#fff';
+  document.getElementById('entrycard').style.borderTopColor=cc.color;
 }
 function addCat(){
   askText('新しいボタンの名前(項目はタスク型になります)','',name=>{
@@ -585,12 +715,27 @@ function renderFields(vals={}){
   c.fields.filter(x=>x.type==='personlist').forEach(x=>{
     plState[x.k]=Array.isArray(vals[x.k])?vals[x.k].slice():[];
   });
-  f.innerHTML=c.fields.map(fd=>fieldHTML(fd,vals)).join('');
+  let html='',i=0;const fsArr=c.fields;
+  while(i<fsArr.length){
+    const f0=fsArr[i];
+    if(f0.row){
+      const grp=[f0];let j=i+1;
+      while(j<fsArr.length&&fsArr[j].row===f0.row){grp.push(fsArr[j]);j++}
+      html+='<div class="row2'+(f0.row==='h1'?' tight':'')+'">'+grp.map(g=>fieldHTML(g,vals)).join('')+'</div>';
+      i=j;
+    }else{html+=fieldHTML(f0,vals);i++}
+  }
+  f.innerHTML=html;
   c.fields.filter(x=>x.type==='select').forEach(x=>{
-    selState[x.k]=vals[x.k]||x.def||x.options[0];
+    selState[x.k]=(x.k in vals)?(vals[x.k]??''):(x.optional?'':(x.def||x.options[0]));
     paintSelect(x);
   });
+  c.fields.filter(x=>x.type==='flags').forEach(x=>{
+    selState[x.k]=Array.isArray(vals[x.k])?vals[x.k].slice():[];
+    paintFlags(x);
+  });
   c.fields.filter(x=>x.type==='date6').forEach(x=>bindDate6('f_'+x.k,false));
+  c.fields.filter(x=>x.type==='date6o').forEach(x=>bindD6o('f_'+x.k));
   c.fields.filter(x=>x.type==='statline').forEach(x=>{
     bindDate6('f_'+x.k+'_d',true);
     paintStat(x.k);
@@ -601,7 +746,7 @@ function renderFields(vals={}){
   if(main&&!editingId){const e=document.getElementById('f_'+main.k);if(e&&e.focus)setTimeout(()=>e.focus(),50)}
 }
 function selButtonsHTML(fd){
-  let h=fd.options.map(o=>`<button data-v="${escAttr(o)}" onclick="setSel('${fd.k}','${escAttr(o)}')">${esc(o)}</button>`).join('');
+  let h=fd.options.map(o=>`<button data-v="${escAttr(o)}" onclick="setSel('${fd.k}','${escAttr(o)}')">${esc((fd.labels&&fd.labels[o])||o)}</button>`).join('');
   if(fd.extendable)h+=`<button class="addopt" onclick="addOption('${fd.k}')">＋</button>`;
   return h;
 }
@@ -611,9 +756,11 @@ function fieldHTML(fd,vals){
   switch(fd.type){
     case 'date6':{
       const val=v||today6();
-      return wrap(`<span style="display:flex;align-items:center"><input type="text" class="date6 num" id="f_${fd.k}" inputmode="numeric" maxlength="6" value="${escAttr(val)}"><span class="datepreview" id="p_f_${fd.k}"></span></span>`);
+      return wrap(`<input type="text" class="date6 num" id="f_${fd.k}" inputmode="numeric" maxlength="6" value="${escAttr(val)}">`);
     }
     case 'person':return wrap(`<button class="personbtn ${v?'':'empty'}" id="f_${fd.k}" onclick="openPicker('f_${fd.k}','${fd.label}')">${esc(v||'タップして選択')}</button>`);
+    case 'ankenlink':return wrap(`<button class="personbtn ${v?'':'empty'}" id="f_${fd.k}" onclick="openAnkenPicker('${fd.k}')">${esc(v||'タップして選択(任意)')}</button>`);
+    case 'date6o':return wrap(`<input type="text" class="date6 num" id="f_${fd.k}" inputmode="numeric" maxlength="6" placeholder="未入力" value="${escAttr(v||'')}">`);
     case 'personlist':return wrap(`<div class="plchips" id="f_${fd.k}"></div>`);
     case 'text':return wrap(`<input type="text" id="f_${fd.k}" placeholder="${escAttr(fd.ph||'')}" value="${escAttr(v||'')}">`);
     case 'textarea':return wrap(`<textarea id="f_${fd.k}" placeholder="${escAttr(fd.ph||'')}">${esc(v||'')}</textarea>`);
@@ -625,6 +772,7 @@ function fieldHTML(fd,vals){
     case 'seconds':return wrap(
       `<div class="minrow"><input type="number" id="f_${fd.k}" inputmode="numeric" placeholder="0" value="${v??''}"><span class="unit">秒</span></div>`);
     case 'select':return wrap(`<div class="selrow" id="f_${fd.k}">${selButtonsHTML(fd)}</div>`);
+    case 'flags':return wrap(`<div class="selrow" id="f_${fd.k}">${fd.options.map(o=>`<button data-v="${escAttr(o)}" onclick="setFlag('${fd.k}','${escAttr(o)}')">${esc((fd.labels&&fd.labels[o])||o)}</button>`).join('')}</div>`);
     case 'statline':{
       const sv=vals[fd.sk]||fd.options[0];
       const dv=vals[fd.dk]||'';
@@ -635,7 +783,7 @@ function fieldHTML(fd,vals){
             <option${sv===fd.options[1]?' selected':''}>${esc(fd.options[1])}</option>
           </select></div>
         <div class="sl"><label>${fd.dlabel}</label>
-          <span style="display:flex;align-items:center"><input type="text" class="date6 num" id="f_${fd.k}_d" inputmode="numeric" maxlength="6" placeholder="未入力" value="${escAttr(dv)}"><span class="datepreview" id="p_f_${fd.k}_d"></span></span></div>
+          <input type="text" class="date6 num" id="f_${fd.k}_d" inputmode="numeric" maxlength="6" placeholder="未入力" value="${escAttr(dv)}"></div>
       </div></div>`;
     }
   }
@@ -691,21 +839,43 @@ function addOption(k){
   });
 }
 function bindDate6(elId,optional){
-  const e=document.getElementById(elId),p=document.getElementById('p_'+elId);
+  const e=document.getElementById(elId);
   if(!e)return;
   const upd=()=>{
     e.value=e.value.replace(/[^\d]/g,'').slice(0,6);
-    if(e.value.length===0){
-      e.classList.remove('bad');p.textContent=optional?'':'6桁で入力(例:'+today6()+')';
-    }else if(e.value.length===6){
-      if(valid6(e.value)){e.classList.remove('bad');p.textContent='→ '+iso6(e.value)}
-      else{e.classList.add('bad');p.textContent='日付が不正です'}
-    }else{e.classList.remove('bad');p.textContent='6桁で入力(例:'+today6()+')'}
+    e.classList.toggle('bad',e.value.length===6&&!valid6(e.value));
   };
   e.oninput=upd;upd();
 }
+function bindD6o(id){
+  const e=document.getElementById(id);if(!e)return;
+  const u=()=>{
+    e.value=e.value.replace(/[^\d]/g,'').slice(0,6);
+    e.classList.toggle('bad',e.value.length===6&&!valid6(e.value));
+  };
+  e.oninput=u;u();
+}
 function setMin(k,m){document.getElementById('f_'+k).value=m}
-function setSel(k,v){selState[k]=v;const fd=catOf(activeCat).fields.find(x=>x.k===k);paintSelect(fd);applyShowIf();applyBigIf()}
+function setSel(k,v){
+  const fd=catOf(activeCat).fields.find(x=>x.k===k);
+  if(fd&&fd.optional&&selState[k]===v){selState[k]=''}else{selState[k]=v}
+  paintSelect(fd);applyShowIf();applyBigIf();
+}
+function setFlag(k,v){
+  const fd=catOf(activeCat).fields.find(x=>x.k===k);if(!fd)return;
+  const arr=selState[k]||[];
+  const i=arr.indexOf(v);
+  if(i>=0)arr.splice(i,1);else arr.push(v);
+  selState[k]=arr;
+  paintFlags(fd);
+}
+function paintFlags(fd){
+  const el=document.getElementById('f_'+fd.k);if(!el)return;
+  el.querySelectorAll('button').forEach(b=>{
+    const on=(selState[fd.k]||[]).includes(b.dataset.v);
+    b.className=on?('on '+((fd.cls&&fd.cls[b.dataset.v])||'')):'';
+  });
+}
 function paintSelect(fd){
   const el=document.getElementById('f_'+fd.k);if(!el)return;
   el.querySelectorAll('button').forEach(b=>{
@@ -739,8 +909,12 @@ function readFields(){
       d[fd.k]=(plState[fd.k]||[]).slice();
       return;
     }
+    if(fd.type==='flags'){
+      d[fd.k]=(selState[fd.k]||[]).slice();
+      return;
+    }
     const e=document.getElementById('f_'+fd.k);if(!e)return;
-    if(fd.type==='person'){d[fd.k]=e.classList.contains('empty')?'':e.textContent}
+    if(fd.type==='person'||fd.type==='ankenlink'){d[fd.k]=e.classList.contains('empty')?'':e.textContent}
     else if(fd.type==='select'){d[fd.k]=selState[fd.k]}
     else if(fd.type==='amount'||fd.type==='minutes'||fd.type==='seconds'){d[fd.k]=e.value===''?'':Number(e.value)}
     else{d[fd.k]=e.value.trim()}
@@ -754,8 +928,11 @@ function saveEntry(){
   for(const fd of c.fields.filter(f=>f.type==='statline')){
     if(d[fd.dk]&&!valid6(d[fd.dk])){toast(fd.dlabel.replace('(6桁)','')+'は6桁で入力してください');return}
   }
+  for(const fd of c.fields.filter(f=>f.type==='date6o')){
+    if(d[fd.k]&&!valid6(d[fd.k])){toast('日付は6桁で入力してください(例:'+today6()+')');return}
+  }
   const hasBody=c.fields.some(fd=>{
-    if(['date6','select','statline'].includes(fd.type))return false;
+    if(['date6','select','statline','flags'].includes(fd.type))return false;
     const v=d[fd.k];
     if(Array.isArray(v))return v.length>0;
     return v!==''&&v!==undefined&&v!==null;
@@ -781,6 +958,41 @@ function saveEntry(){
   saveLocal();
   pushEntryOp(rec);
   renderFields();renderTimeline();
+}
+
+/* ============== 案件ピッカー(紐づけ用) ============== */
+let ankenTarget=null;
+function ankenLabel(en){
+  const d=en.data||{};
+  const head=String(d.content||'').split('\n')[0];
+  return ((d.partner?d.partner+'｜':'')+head).slice(0,40)||'(内容なし)';
+}
+function openAnkenPicker(fieldK){
+  ankenTarget=fieldK;
+  document.getElementById('ankenSearch').value='';
+  renderAnkenList();
+  document.getElementById('ankenOverlay').classList.add('open');
+}
+function closeAnkenPicker(){document.getElementById('ankenOverlay').classList.remove('open')}
+function renderAnkenList(){
+  const q=document.getElementById('ankenSearch').value.trim();
+  const el=document.getElementById('ankenList');el.innerHTML='';
+  const list=entries.filter(e=>e.cat==='anken').filter(e=>!q||ankenLabel(e).includes(q)||entryValues(e).join(' ').includes(q));
+  if(!list.length){el.innerHTML='<div style="color:var(--sub);font-size:.85rem;padding:14px 4px">該当する案件がありません。先に案件タブで登録してください。</div>'}
+  list.forEach(e=>{
+    const b=document.createElement('button');
+    b.textContent=ankenLabel(e);
+    b.onclick=()=>pickAnken(ankenLabel(e));
+    el.appendChild(b);
+  });
+}
+function pickAnken(label){
+  const e=document.getElementById('f_'+ankenTarget);
+  if(e){
+    if(label){e.textContent=label;e.classList.remove('empty')}
+    else{e.textContent='タップして選択(任意)';e.classList.add('empty')}
+  }
+  closeAnkenPicker();
 }
 
 /* ============== 人物ピッカー ============== */
@@ -902,7 +1114,16 @@ function matches(e,q){return [catName(e.cat),...entryValues(e)].join(' ').includ
 
 function summaryHTML(e){
   const fs=catFields(e.cat);const d=e.data;
-  let badges=fs.filter(f=>f.type==='select'&&d[f.k]&&f.k!=='io').map(f=>`<span class="badge">${esc(d[f.k])}</span>`).join('');
+  let badges=fs.filter(f=>f.type==='select'&&d[f.k]&&d[f.k]!=='未設定'&&f.k!=='io').map(f=>{
+    const val=d[f.k];const lab=(f.labels&&f.labels[val])||val;
+    return `<span class="badge">${esc(lab)}</span>`;
+  }).join('');
+  fs.filter(f=>f.type==='flags'&&Array.isArray(d[f.k])&&d[f.k].length).forEach(f=>{
+    d[f.k].forEach(fv=>{
+      const cls=fv==='緊急'?' pa':fv==='重要'?' pb':'';
+      badges+=`<span class="badge${cls}">${esc(fv)}</span>`;
+    });
+  });
   statlines(e.cat).forEach(fd=>{
     const sv=d[fd.sk]||fd.options[0];
     badges+=`<span class="badge ${sv===fd.options[1]?'bgreen':'bred'}">${esc(sv)}</span>`;
@@ -911,6 +1132,7 @@ function summaryHTML(e){
       else if(sv===fd.options[1])badges+=`<span class="badge bred">未入金</span>`;
     }
   });
+  if(d.anken)badges+=`<span class="badge">${esc(String(d.anken).slice(0,14))}</span>`;
   const persons=fs.filter(f=>f.type==='person'&&d[f.k]&&f.k!=='delegate').map(f=>d[f.k]);
   let parts=[];
   if(persons.length)parts.push('<b>'+esc(persons.join(' / '))+'</b>');
@@ -964,6 +1186,8 @@ function openDetail(id){
     if(f.type==='amount')v=fmtAmt(v);
     if(f.type==='minutes')v=fmtMin(v);
     if(f.type==='seconds')v=v+'秒';
+    if(f.type==='date6o')v=iso6(v)||v;
+    if(f.type==='select'&&f.labels&&f.labels[v])v=f.labels[v]+'('+v+')';
     return `<div class="dl"><div class="k">${f.label.replace(/(＋.*)/,'').trim()}</div><div class="v">${esc(v)}</div></div>`;
   }).join('');
   document.getElementById('detailOverlay').classList.add('open');
@@ -984,7 +1208,8 @@ function entryText(e){
     if(f.type==='amount')v=fmtAmt(v);
     if(f.type==='minutes')v=fmtMin(v);
     if(f.type==='seconds')v=v+'秒';
-    lines.push(f.label.replace(/(＋.*)/,'').replace(/[()（）]/g,'').trim()+': '+v);
+    if(f.type==='date6o')v=iso6(v)||v;
+    lines.push(f.label.replace(/[(（][^)）]*[)）]/g,'').replace(/(＋.*)/,'').trim()+': '+v);
   });
   return lines.join('\n');
 }
@@ -1040,6 +1265,7 @@ function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').
 function escAttr(s){return esc(s).replace(/"/g,'&quot;')}
 
 loadLocal();
+migrate();
 renderTabs();renderFields();renderTimeline();
 updStat();
 if(!apiKey){showKeyScreen('初回設定です');updStat('未接続');}
