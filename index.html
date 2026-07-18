@@ -162,6 +162,10 @@ body.editmode .gtab.active .del{display:inline}
 .plist{display:flex;flex-direction:column}
 .plist button{text-align:left;border:none;border-bottom:1px solid var(--line);background:none;padding:11px 6px;font-size:.95rem;cursor:pointer;font-family:inherit;color:var(--ink)}
 .plist button:hover{background:#F6F7F5}
+.prow{display:flex;align-items:center;border-bottom:1px solid var(--line)}
+.prow .pname{flex:1;text-align:left;border:none;background:none;padding:11px 6px;font-size:.95rem;cursor:pointer;font-family:inherit;color:var(--ink)}
+.prow .pname:hover{background:#F6F7F5}
+.prow .pedit{flex:0 0 auto;border:1px solid var(--line);border-radius:8px;background:#F6F7F5;font-size:.72rem;padding:4px 10px;color:var(--sub);cursor:pointer;font-family:inherit;margin-left:6px}
 .paddrow{display:flex;gap:8px;margin-top:12px}
 .paddrow input{flex:1}
 .paddrow button{flex:0 0 auto;border:1px solid var(--focus);color:var(--focus);background:none;border-radius:8px;padding:0 14px;font-size:.85rem;cursor:pointer;font-family:inherit}
@@ -333,7 +337,7 @@ function loadLocal(){
 }
 /* ---- 一括改修v3の自動移行 ---- */
 function migrate(){
-  const ren={'行政書士':'行政','宅建業':'宅建','他士業':'士業','法人顧客':'法人','個人顧客':'個人'};
+  const ren={'行政書士':'行政','宅建業':'宅建','他士業':'士業','法人顧客':'業者','個人顧客':'一般','法人':'業者','個人':'一般'};
   let g=false;
   groups.forEach(x=>{if(ren[x.name]){x.name=ren[x.name];g=true}});
   if(g)cfgSync();
@@ -596,8 +600,8 @@ let groups=[
  {id:'g1',name:'行政',members:[]},
  {id:'g2',name:'宅建',members:[]},
  {id:'g3',name:'士業',members:[]},
- {id:'g4',name:'法人',members:[]},
- {id:'g5',name:'個人',members:[]},
+ {id:'g4',name:'業者',members:[]},
+ {id:'g5',name:'一般',members:[]},
  {id:'g6',name:'その他',members:[]},
 ];
 let recentPeople=[];
@@ -1079,14 +1083,44 @@ function renderPickerList(){
   const q=document.getElementById('pickerSearch').value.trim();
   const el=document.getElementById('personList');el.innerHTML='';
   let list;
-  if(q){list=groups.flatMap(g=>g.members.filter(m=>m.includes(q)).map(m=>({name:m,g:g.name})))}
-  else{const g=groups.find(x=>x.id===activeGroup);list=g?g.members.map(m=>({name:m,g:null})):[]}
+  if(q){list=groups.flatMap(g=>g.members.filter(m=>m.includes(q)).map(m=>({name:m,g:g.name,gid:g.id})))}
+  else{const g=groups.find(x=>x.id===activeGroup);list=g?g.members.map(m=>({name:m,g:null,gid:g.id})):[]}
   if(!list.length){el.innerHTML='<div style="color:var(--sub);font-size:.85rem;padding:14px 4px">該当なし。下の欄から追加できます。</div>'}
   list.forEach(p=>{
-    const b=document.createElement('button');
+    const row=document.createElement('div');row.className='prow';
+    const b=document.createElement('button');b.className='pname';
     b.textContent=p.name+(p.g?`(${p.g})`:'');
     b.onclick=()=>pickPerson(p.name);
-    el.appendChild(b);
+    const e=document.createElement('button');e.className='pedit';
+    e.textContent='名前変更';
+    e.onclick=()=>renamePerson(p.gid,p.name);
+    row.appendChild(b);row.appendChild(e);
+    el.appendChild(row);
+  });
+}
+function renamePerson(gid,oldName){
+  askText('名前を変更(過去の記録もまとめて新しい名前になります)',oldName,nm=>{
+    if(nm===oldName)return;
+    const g=groups.find(x=>x.id===gid);if(!g)return;
+    if(g.members.includes(nm)){toast('同じ名前が既に登録されています');return}
+    const idx=g.members.indexOf(oldName);
+    if(idx>=0)g.members[idx]=nm;
+    recentPeople=recentPeople.map(p=>p===oldName?nm:p);
+    let changed=0;
+    entries.forEach(en=>{
+      let hit=false;
+      const fs=catFields(en.cat),d=en.data;
+      fs.forEach(f=>{
+        if(f.type==='person'&&d[f.k]===oldName){d[f.k]=nm;hit=true}
+        if(f.type==='personlist'&&Array.isArray(d[f.k])&&d[f.k].includes(oldName)){d[f.k]=d[f.k].map(x=>x===oldName?nm:x);hit=true}
+        if(f.type==='ankenlink'&&typeof d[f.k]==='string'&&d[f.k].includes(oldName)){d[f.k]=d[f.k].split(oldName).join(nm);hit=true}
+      });
+      if(hit){changed++;enqueue({action:'save',entry:en,cols:colsOf(en)},true)}
+    });
+    saveLocal();cfgSync();
+    renderPickerList();renderRecent();renderTimeline();
+    flush();
+    toast(changed?('名前を変更し、過去の記録'+changed+'件も更新しました'):'名前を変更しました');
   });
 }
 function addPerson(){
