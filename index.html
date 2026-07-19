@@ -91,7 +91,7 @@ textarea.big{min-height:170px}
 .selrow button.addopt{border:1px dashed var(--sub);background:none;color:var(--sub);padding:8px 12px}
 /* 時間ワンタップ */
 .minrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-.minrow input{width:90px;flex:0 0 auto}
+.minrow input{width:120px;flex:0 0 auto}
 .minrow .unit{font-size:.8rem;color:var(--sub);margin-right:4px}
 .minrow button{border:1px solid var(--line);background:#FCFCFB;border-radius:8px;padding:8px 10px;font-size:.85rem;cursor:pointer;font-family:inherit;color:var(--ink)}
 /* 省スペース型ステータス行(プルダウン+日付) */
@@ -281,7 +281,8 @@ body.editmode .gtab.active .del{display:inline}
 <div class="overlay" id="ankenOverlay" onclick="if(event.target===this)closeAnkenPicker()">
   <div class="sheet">
     <h3><span>案件を選択</span><button class="closebtn" onclick="closeAnkenPicker()">×</button></h3>
-    <input type="text" id="ankenSearch" placeholder="案件を検索" oninput="renderAnkenList()" style="margin-bottom:12px">
+    <input type="text" id="ankenSearch" placeholder="案件を検索" oninput="renderAnkenList()" style="margin-bottom:8px">
+    <div style="margin-bottom:10px"><button class="fbtn" id="fb_ankendone" onclick="toggleAnkenDone()">完了した案件を含む</button></div>
     <div class="plist" id="ankenList"></div>
     <div class="paddrow"><button style="flex:1" onclick="pickAnken('')">紐づけを解除(なし)</button></div>
   </div>
@@ -310,7 +311,7 @@ const PALETTE=['#3B6FB5','#7B5EA7','#5F7F5F','#9E5E8A','#A84A3B','#4E6E9E','#8A7
 
 /* =============== 同期レイヤー(GAS+スプレッドシート) =============== */
 const GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
-const LS_KEY='ql_key', LS_CACHE='ql_cache_v8', LS_OUTBOX='ql_outbox_v1';
+const LS_KEY='ql_key', LS_CACHE='ql_cache_v9', LS_OUTBOX='ql_outbox_v1';
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 let apiKey=lsGet(LS_KEY)||'';
@@ -325,7 +326,7 @@ function loadLocal(){
     let c=JSON.parse(lsGet(LS_CACHE)||'null');
     if(!c){
       /* 旧バージョンのキャッシュから記録・人物リストだけ引き継ぐ(タブ構成は新定義を使う) */
-      const old=JSON.parse(lsGet('ql_cache_v7')||lsGet('ql_cache_v6')||lsGet('ql_cache_v5')||lsGet('ql_cache_v4')||lsGet('ql_cache_v3')||lsGet('ql_cache_v1')||'null');
+      const old=JSON.parse(lsGet('ql_cache_v8')||lsGet('ql_cache_v7')||lsGet('ql_cache_v6')||lsGet('ql_cache_v5')||lsGet('ql_cache_v4')||lsGet('ql_cache_v3')||lsGet('ql_cache_v1')||'null');
       if(old)c={entries:old.entries,groups:old.groups,recentPeople:old.recentPeople};
     }
     if(c){
@@ -384,7 +385,7 @@ async function flush(){
   }
   flushing=false;updStat();
 }
-const OTHER_LABEL={engage:'区分',source:'経路',scope:'守備範囲',delegate:'依頼先',kyodo:'共同',introducers:'紹介者',budget:'金額',area:'エリア',zoning:'用途地域',size:'広さ・坪数',youto:'用途',idea:'対策',free:'自由記述',deal:'売買',prio:'区分',anken:'案件',est:'設立日',fiscal:'決算期',capital:'資本金',shares:'株式数',permits:'許認可',aoiro:'申告',kazei:'消費税',honsoku:'課税方式',sales1:'売上2期前',sales2:'売上前期',sales3:'売上当期予想',bd1:'誕生日①',bd2:'誕生日②',bd3:'誕生日③',ng1:'年賀状①',ng2:'年賀状②',ng3:'年賀状③',sm1:'暑中①',sm2:'暑中②',sm3:'暑中③'};
+const OTHER_LABEL={engage:'区分',source:'経路',scope:'守備範囲',delegate:'依頼先',kyodo:'共同',introducers:'紹介者',start:'開始',end:'終了',budget:'金額',area:'エリア',zoning:'用途地域',size:'広さ・坪数',youto:'用途',idea:'対策',free:'自由記述',deal:'売買',prio:'区分',anken:'案件',est:'設立日',fiscal:'決算期',capital:'資本金',shares:'株式数',permits:'許認可',aoiro:'申告',kazei:'消費税',honsoku:'課税方式',sales1:'売上2期前',sales2:'売上前期',sales3:'売上当期予想',bd1:'誕生日①',bd2:'誕生日②',bd3:'誕生日③',ng1:'年賀状①',ng2:'年賀状②',ng3:'年賀状③',sm1:'暑中①',sm2:'暑中②',sm3:'暑中③'};
 function oLabel(f){return OTHER_LABEL[f.k]||String(f.label||f.k).replace(/[(（].*$/,'').trim()}
 function colsOf(e){
   const fs=catFields(e.cat),d=e.data;
@@ -429,6 +430,9 @@ function colsOf(e){
       case 'date6o':
         if(valid6(v||''))others.push(oLabel(f)+': '+iso6(v));
         break;
+      case 'time4':
+        if(valid4(v||''))others.push(oLabel(f)+': '+fmt4(v));
+        break;
       case 'text': case 'textarea': case 'bigtext':
         if(f.main){c.content=oneline(v||'')}
         else if(f.k==='note'){c.note=oneline(v||'')}
@@ -444,7 +448,7 @@ let cfgTimer=null;
 function cfgSync(){
   clearTimeout(cfgTimer);
   cfgTimer=setTimeout(()=>{
-    enqueue({action:'config',name:'cats7',value:cats});
+    enqueue({action:'config',name:'cats8',value:cats});
     enqueue({action:'config',name:'groups',value:groups});
     enqueue({action:'config',name:'recent',value:recentPeople});
   },1200);
@@ -470,7 +474,7 @@ async function fetchAll(){
     sv.sort((a,b)=>(b.ts||0)-(a.ts||0));
     entries=sv;
     if(j.config){
-      if(Array.isArray(j.config.cats7)&&j.config.cats7.length)cats=j.config.cats7;
+      if(Array.isArray(j.config.cats8)&&j.config.cats8.length)cats=j.config.cats8;
       if(Array.isArray(j.config.groups)&&j.config.groups.length)groups=j.config.groups;
       if(Array.isArray(j.config.recent))recentPeople=j.config.recent;
     }
@@ -531,7 +535,9 @@ let cats=[
  {id:'jikan',name:'時間',color:'#5C4326',text:'#fff',fields:[
    {k:'date',label:'日付',type:'date6'},
    {k:'content',label:'内容(タイトル)',type:'text',ph:'例:更新申請の書類作成',main:1},
-   {k:'minutes',label:'所要時間',type:'minutes'}]},
+   {k:'start',label:'開始時間(4桁)',type:'time4',row:'tm'},
+   {k:'end',label:'終了時間(4桁)',type:'time4',row:'tm'},
+   {k:'minutes',label:'所要時間(自動計算・直接入力も可)',type:'minutes'}]},
  {id:'shukan',name:'習慣',color:'#4A3A6B',text:'#fff',fields:[
    {k:'date',label:'日付',type:'date6'},
    {k:'kind',label:'種類',type:'select',extendable:true,options:['DASH','節約']},
@@ -663,6 +669,11 @@ function valid6(s){
   const m=+s.slice(2,4),dd=+s.slice(4,6);
   return m>=1&&m<=12&&dd>=1&&dd<=31;
 }
+function valid4(s){
+  if(!/^\d{4}$/.test(s))return false;
+  return +s.slice(0,2)<=23&&+s.slice(2,4)<=59;
+}
+function fmt4(s){return valid4(s)? s.slice(0,2)+':'+s.slice(2,4) : (s||'')}
 function fmt6(s){return valid6(s)? s.slice(0,2)+'/'+s.slice(2,4)+'/'+s.slice(4,6) : (s||'')}
 function iso6(s){return valid6(s)? '20'+s.slice(0,2)+'-'+s.slice(2,4)+'-'+s.slice(4,6) : (s||'')}
 
@@ -683,7 +694,8 @@ function renderTabs(){
     b.onclick=(e)=>{
       if(e.target.dataset.del){removeCat(c.id);return}
       if(document.body.classList.contains('editmode')&&c.id===activeCat){renameCat(c.id);return}
-      activeCat=c.id;editingId=null;renderTabs();renderFields();
+      if(c.id===activeCat)return;
+      guardLeave(()=>{activeCat=c.id;editingId=null;renderTabs();renderFields();});
     };
     el.appendChild(b);
   });
@@ -694,6 +706,20 @@ function renderTabs(){
   const sb=document.getElementById('saveBtn');
   sb.style.background=cc.color;sb.style.color=cc.text||'#fff';
   document.getElementById('entrycard').style.borderTopColor=cc.color;
+}
+function guardLeave(cb){
+  try{
+    const c=catOf(activeCat);
+    const reqFlag=c.fields.find(f=>f.type==='flags'&&f.required);
+    if(reqFlag&&(selState[reqFlag.k]||[]).length===0){
+      const d=readFields();
+      if(hasBodyOf(c,d)){
+        askConfirm('区分を選んでいません。保存されていませんが、次の画面に行っていいですか?','移動する',cb);
+        return;
+      }
+    }
+  }catch(e){}
+  cb();
 }
 function addCat(){
   askText('新しいボタンの名前(項目はタスク型になります)','',name=>{
@@ -750,6 +776,7 @@ function renderFields(vals={}){
   });
   c.fields.filter(x=>x.type==='date6').forEach(x=>bindDate6('f_'+x.k,false));
   c.fields.filter(x=>x.type==='date6o').forEach(x=>bindD6o('f_'+x.k));
+  c.fields.filter(x=>x.type==='time4').forEach(x=>bindT4('f_'+x.k));
   c.fields.filter(x=>x.type==='statline').forEach(x=>{
     bindDate6('f_'+x.k+'_d',true);
     paintStat(x.k);
@@ -775,6 +802,7 @@ function fieldHTML(fd,vals){
     case 'person':return wrap(`<button class="personbtn ${v?'':'empty'}" id="f_${fd.k}" onclick="openPicker('f_${fd.k}','${fd.label}')">${esc(v||'タップして選択')}</button>`);
     case 'ankenlink':return wrap(`<button class="personbtn ${v?'':'empty'}" id="f_${fd.k}" onclick="openAnkenPicker('${fd.k}')">${esc(v||'タップして選択(任意)')}</button>`);
     case 'date6o':return wrap(`<input type="text" class="date6 num" id="f_${fd.k}" inputmode="numeric" maxlength="6" placeholder="未入力" value="${escAttr(v||'')}">`);
+    case 'time4':return wrap(`<input type="text" class="date6 num" id="f_${fd.k}" inputmode="numeric" maxlength="4" placeholder="例:1400" value="${escAttr(v||'')}">`);
     case 'personlist':return wrap(`<div class="plchips" id="f_${fd.k}"></div>`);
     case 'text':return wrap(`<input type="text" id="f_${fd.k}" placeholder="${escAttr(fd.ph||'')}" value="${escAttr(v||'')}">`);
     case 'textarea':return wrap(`<textarea id="f_${fd.k}" placeholder="${escAttr(fd.ph||'')}">${esc(v||'')}</textarea>`);
@@ -861,6 +889,24 @@ function bindDate6(elId,optional){
   };
   e.oninput=upd;upd();
 }
+function bindT4(id){
+  const e=document.getElementById(id);if(!e)return;
+  const u=()=>{
+    e.value=e.value.replace(/[^\d]/g,'').slice(0,4);
+    e.classList.toggle('bad',e.value.length===4&&!valid4(e.value));
+    calcDuration();
+  };
+  e.oninput=u;u();
+}
+function calcDuration(){
+  const st=document.getElementById('f_start'),en=document.getElementById('f_end'),mi=document.getElementById('f_minutes');
+  if(!st||!en||!mi)return;
+  if(valid4(st.value)&&valid4(en.value)){
+    let diff=(+en.value.slice(0,2)*60+ +en.value.slice(2,4))-(+st.value.slice(0,2)*60+ +st.value.slice(2,4));
+    if(diff<0)diff+=1440; /* 日またぎ */
+    mi.value=diff;
+  }
+}
 function bindD6o(id){
   const e=document.getElementById(id);if(!e)return;
   const u=()=>{
@@ -915,6 +961,14 @@ function applyBigIf(){
     e.classList.toggle('big',selState[x.bigIf.k]===x.bigIf.v);
   });
 }
+function hasBodyOf(c,d){
+  return c.fields.some(fd=>{
+    if(['date6','select','statline','flags'].includes(fd.type))return false;
+    const v=d[fd.k];
+    if(Array.isArray(v))return v.length>0;
+    return v!==''&&v!==undefined&&v!==null;
+  });
+}
 function readFields(){
   const c=catOf(activeCat);const d={};
   c.fields.forEach(fd=>{
@@ -950,16 +1004,13 @@ function saveEntry(){
   for(const fd of c.fields.filter(f=>f.type==='date6o')){
     if(d[fd.k]&&!valid6(d[fd.k])){toast('日付は6桁で入力してください(例:'+today6()+')');return}
   }
+  for(const fd of c.fields.filter(f=>f.type==='time4')){
+    if(d[fd.k]&&!valid4(d[fd.k])){toast('時刻は4桁で入力してください(例:1400)');return}
+  }
   for(const fd of c.fields.filter(f=>f.type==='flags'&&f.required)){
     if(!((d[fd.k]||[]).length)){toast('区分を選んでください(緊急・重要・なし)');return}
   }
-  const hasBody=c.fields.some(fd=>{
-    if(['date6','select','statline','flags'].includes(fd.type))return false;
-    const v=d[fd.k];
-    if(Array.isArray(v))return v.length>0;
-    return v!==''&&v!==undefined&&v!==null;
-  });
-  if(!hasBody){toast('内容を入れてください');return}
+  if(!hasBodyOf(c,d)){toast('内容を入れてください');return}
   Object.keys(d).forEach(k=>{
     const fd=c.fields.find(x=>x.k===k);
     if(!fd)return;
@@ -989,8 +1040,18 @@ function ankenLabel(en){
   const head=String(d.content||'').split('\n')[0];
   return ((d.partner?d.partner+'｜':'')+head).slice(0,40)||'(内容なし)';
 }
+let ankenShowDone=false;
+function toggleAnkenDone(){
+  ankenShowDone=!ankenShowDone;
+  const b=document.getElementById('fb_ankendone');
+  if(b)b.className='fbtn'+(ankenShowDone?' on':'');
+  renderAnkenList();
+}
 function openAnkenPicker(fieldK){
   ankenTarget=fieldK;
+  ankenShowDone=false;
+  const b=document.getElementById('fb_ankendone');
+  if(b)b.className='fbtn';
   document.getElementById('ankenSearch').value='';
   renderAnkenList();
   document.getElementById('ankenOverlay').classList.add('open');
@@ -1002,8 +1063,10 @@ function closeAnkenPicker(){document.getElementById('ankenOverlay').classList.re
 function renderAnkenList(){
   const q=document.getElementById('ankenSearch').value.trim();
   const el=document.getElementById('ankenList');el.innerHTML='';
-  const list=entries.filter(e=>e.cat==='anken').filter(e=>!q||ankenLabel(e).includes(q)||entryValues(e).join(' ').includes(q));
-  if(!list.length){el.innerHTML='<div style="color:var(--sub);font-size:.85rem;padding:14px 4px">該当する案件がありません。先に案件タブで登録してください。</div>'}
+  const list=entries.filter(e=>e.cat==='anken')
+    .filter(e=>ankenShowDone||(e.data||{}).doneStat!=='完了')
+    .filter(e=>!q||ankenLabel(e).includes(q)||entryValues(e).join(' ').includes(q));
+  if(!list.length){el.innerHTML='<div style="color:var(--sub);font-size:.85rem;padding:14px 4px">該当する案件がありません(完了済みは「完了した案件を含む」で表示されます)。</div>'}
   list.forEach(e=>{
     const b=document.createElement('button');
     b.textContent=ankenLabel(e);
@@ -1199,6 +1262,9 @@ function passFilters(e){
   if(impOn&&!p.includes('重要'))return false;
   return true;
 }
+const CAT_ORDER={task:1,anken:2,bukken:3,houjin:4,kojin:5,shushi:6,jikan:7,shukan:8,genkin:9};
+function catOrder(e){return CAT_ORDER[e.cat]||99}
+function sortForList(list){return list.sort((a,b)=>catOrder(a)-catOrder(b)||((b.ts||0)-(a.ts||0)))}
 function matches(e,q){
   const hay=[catName(e.cat),...entryValues(e)].join(' ');
   return q.split(/[\s\u3000]+/).filter(Boolean).every(t=>hay.includes(t));
@@ -1244,7 +1310,7 @@ function summaryHTML(e){
 function renderTimeline(){
   const q=document.getElementById('searchBox').value.trim();
   const el=document.getElementById('timeline');el.innerHTML='';
-  const list=entries.filter(passFilters).filter(e=>!q||matches(e,q));
+  const list=sortForList(entries.filter(passFilters).filter(e=>!q||matches(e,q)));
   if(!list.length){el.innerHTML='<div class="empty-timeline">表示できる記録がありません(完了分は「完了を含む」で表示されます)</div>';return}
   list.forEach(e=>{
     const s=summaryHTML(e);
@@ -1280,6 +1346,7 @@ function openDetail(id){
     if(f.type==='minutes')v=fmtMin(v);
     if(f.type==='seconds')v=v+'秒';
     if(f.type==='date6o')v=iso6(v)||v;
+    if(f.type==='time4')v=fmt4(v)||v;
     if(f.type==='select'&&f.labels&&f.labels[v])v=f.labels[v]+'('+v+')';
     return `<div class="dl"><div class="k">${f.label.replace(/(＋.*)/,'').trim()}</div><div class="v">${esc(v)}</div></div>`;
   }).join('');
@@ -1302,6 +1369,7 @@ function entryText(e){
     if(f.type==='minutes')v=fmtMin(v);
     if(f.type==='seconds')v=v+'秒';
     if(f.type==='date6o')v=iso6(v)||v;
+    if(f.type==='time4')v=fmt4(v)||v;
     lines.push(f.label.replace(/[(（][^)）]*[)）]/g,'').replace(/(＋.*)/,'').trim()+': '+v);
   });
   return lines.join('\n');
@@ -1325,7 +1393,7 @@ function deleteOne(){
 }
 function copyAll(){
   const q=document.getElementById('searchBox').value.trim();
-  const list=entries.filter(passFilters).filter(e=>!q||matches(e,q));
+  const list=sortForList(entries.filter(passFilters).filter(e=>!q||matches(e,q)));
   if(!list.length){toast('コピーする記録がありません');return}
   const text=list.map(entryText).join('\n----------------------------------------\n');
   copyText(text,q?`検索結果 ${list.length}件をコピーしました`:`全 ${list.length}件をコピーしました`);
