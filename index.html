@@ -311,7 +311,7 @@ const PALETTE=['#3B6FB5','#7B5EA7','#5F7F5F','#9E5E8A','#A84A3B','#4E6E9E','#8A7
 
 /* =============== 同期レイヤー(GAS+スプレッドシート) =============== */
 const GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
-const LS_KEY='ql_key', LS_CACHE='ql_cache_v9', LS_OUTBOX='ql_outbox_v1';
+const LS_KEY='ql_key', LS_CACHE='ql_cache_v10', LS_OUTBOX='ql_outbox_v1';
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 let apiKey=lsGet(LS_KEY)||'';
@@ -326,7 +326,7 @@ function loadLocal(){
     let c=JSON.parse(lsGet(LS_CACHE)||'null');
     if(!c){
       /* 旧バージョンのキャッシュから記録・人物リストだけ引き継ぐ(タブ構成は新定義を使う) */
-      const old=JSON.parse(lsGet('ql_cache_v8')||lsGet('ql_cache_v7')||lsGet('ql_cache_v6')||lsGet('ql_cache_v5')||lsGet('ql_cache_v4')||lsGet('ql_cache_v3')||lsGet('ql_cache_v1')||'null');
+      const old=JSON.parse(lsGet('ql_cache_v9')||lsGet('ql_cache_v8')||lsGet('ql_cache_v7')||lsGet('ql_cache_v6')||lsGet('ql_cache_v5')||lsGet('ql_cache_v4')||lsGet('ql_cache_v3')||lsGet('ql_cache_v1')||'null');
       if(old)c={entries:old.entries,groups:old.groups,recentPeople:old.recentPeople};
     }
     if(c){
@@ -345,6 +345,7 @@ function migrate(){
   if(g)cfgSync();
   entries.forEach(en=>{
     if(en.cat==='bukken'&&!en.data.deal)en.data.deal='買い';
+    if(en.cat==='anken'&&!en.data.payStat)en.data.payStat=valid6(en.data.payDate||'')?'入金済み':'未入金';
     if(en.cat==='risk'){
       en.cat='task';
       const d=en.data;
@@ -415,7 +416,8 @@ function colsOf(e){
         break;
       case 'statline':
         if(f.k==='done'){c.done=d[f.sk]||'';c.doneDate=iso6(d[f.dk]||'')}
-        else if(f.k==='bill'){c.bill=d[f.sk]||'';c.payDate=iso6(d[f.dk]||'')}
+        else if(f.k==='bill'){c.bill=d[f.sk]||''}
+        else if(f.k==='pay'){others.push('入金: '+(d[f.sk]||f.options[0]));c.payDate=iso6(d[f.dk]||'')}
         break;
       case 'amount':
         if(f.k==='amount')c.amount=(v!==''&&v!==undefined)?v:'';
@@ -448,7 +450,7 @@ let cfgTimer=null;
 function cfgSync(){
   clearTimeout(cfgTimer);
   cfgTimer=setTimeout(()=>{
-    enqueue({action:'config',name:'cats8',value:cats});
+    enqueue({action:'config',name:'cats9',value:cats});
     enqueue({action:'config',name:'groups',value:groups});
     enqueue({action:'config',name:'recent',value:recentPeople});
   },1200);
@@ -474,7 +476,7 @@ async function fetchAll(){
     sv.sort((a,b)=>(b.ts||0)-(a.ts||0));
     entries=sv;
     if(j.config){
-      if(Array.isArray(j.config.cats8)&&j.config.cats8.length)cats=j.config.cats8;
+      if(Array.isArray(j.config.cats9)&&j.config.cats9.length)cats=j.config.cats9;
       if(Array.isArray(j.config.groups)&&j.config.groups.length)groups=j.config.groups;
       if(Array.isArray(j.config.recent))recentPeople=j.config.recent;
     }
@@ -545,7 +547,8 @@ let cats=[
    {k:'amount',label:'節約額(円)',type:'amount',showIf:{k:'kind',v:'節約'}},
    {k:'content',label:'内容',type:'textarea',ph:'メモ(任意)',main:1}]},
  {id:'anken',name:'案件',color:'#E3D5EE',text:'#232A35',fields:[
-   {k:'bill',label:'請求',type:'statline',sk:'billStat',options:['未請求','請求済み'],dk:'payDate',dlabel:'入金日',autoDate:false,row:'h1'},
+   {k:'bill',label:'請求',type:'statline',sk:'billStat',options:['未請求','請求済み'],row:'h1'},
+   {k:'pay',label:'入金',type:'statline',sk:'payStat',options:['未入金','入金済み'],dk:'payDate',dlabel:'入金日',autoDate:true,row:'h1'},
    {k:'done',label:'完了',type:'statline',sk:'doneStat',options:['未完了','完了'],dk:'doneDate',dlabel:'完了日',autoDate:true,row:'h1'},
    {k:'date',label:'発生日',type:'date6',row:'h1'},
    {k:'partner',label:'相手方',type:'person'},
@@ -707,18 +710,22 @@ function renderTabs(){
   sb.style.background=cc.color;sb.style.color=cc.text||'#fff';
   document.getElementById('entrycard').style.borderTopColor=cc.color;
 }
-function guardLeave(cb){
+function needGuard(){
   try{
     const c=catOf(activeCat);
     const reqFlag=c.fields.find(f=>f.type==='flags'&&f.required);
     if(reqFlag&&(selState[reqFlag.k]||[]).length===0){
       const d=readFields();
-      if(hasBodyOf(c,d)){
-        askConfirm('区分を選んでいません。保存されていませんが、次の画面に行っていいですか?','移動する',cb);
-        return;
-      }
+      return hasBodyOf(c,d);
     }
   }catch(e){}
+  return false;
+}
+function guardLeave(cb){
+  if(needGuard()){
+    askConfirm('区分を選んでいません。保存されていませんが、次の画面に行っていいですか?','移動する',cb);
+    return;
+  }
   cb();
 }
 function addCat(){
@@ -817,15 +824,15 @@ function fieldHTML(fd,vals){
     case 'flags':return wrap(`<div class="selrow" id="f_${fd.k}">${fd.options.map(o=>`<button data-v="${escAttr(o)}" onclick="setFlag('${fd.k}','${escAttr(o)}')">${esc((fd.labels&&fd.labels[o])||o)}</button>`).join('')}</div>`);
     case 'statline':{
       const sv=vals[fd.sk]||fd.options[0];
-      const dv=vals[fd.dk]||'';
+      const dpart=fd.dk?`
+        <div class="sl"><label>${fd.dlabel}</label>
+          <input type="text" class="date6 num" id="f_${fd.k}_d" inputmode="numeric" maxlength="6" placeholder="未入力" value="${escAttr(vals[fd.dk]||'')}"></div>`:'';
       return `<div class="field" id="w_${fd.k}"><div class="statline">
         <div class="sl"><label>${fd.label}</label>
           <select id="f_${fd.k}_s" onchange="statChange('${fd.k}')">
             <option${sv===fd.options[0]?' selected':''}>${esc(fd.options[0])}</option>
             <option${sv===fd.options[1]?' selected':''}>${esc(fd.options[1])}</option>
-          </select></div>
-        <div class="sl"><label>${fd.dlabel}</label>
-          <input type="text" class="date6 num" id="f_${fd.k}_d" inputmode="numeric" maxlength="6" placeholder="未入力" value="${escAttr(dv)}"></div>
+          </select></div>${dpart}
       </div></div>`;
     }
   }
@@ -975,7 +982,7 @@ function readFields(){
     if(fd.showIf&&selState[fd.showIf.k]!==fd.showIf.v)return;
     if(fd.type==='statline'){
       d[fd.sk]=document.getElementById('f_'+fd.k+'_s').value;
-      d[fd.dk]=document.getElementById('f_'+fd.k+'_d').value.trim();
+      if(fd.dk){const de=document.getElementById('f_'+fd.k+'_d');d[fd.dk]=de?de.value.trim():''}
       return;
     }
     if(fd.type==='personlist'){
@@ -998,7 +1005,7 @@ function saveEntry(){
   const c=catOf(activeCat);const d=readFields();
   const dateF=c.fields.find(f=>f.type==='date6');
   if(dateF&&d[dateF.k]&&!valid6(d[dateF.k])){toast('日付は6桁で入力してください(例:'+today6()+')');return}
-  for(const fd of c.fields.filter(f=>f.type==='statline')){
+  for(const fd of c.fields.filter(f=>f.type==='statline'&&f.dk)){
     if(d[fd.dk]&&!valid6(d[fd.dk])){toast(fd.dlabel.replace('(6桁)','')+'は6桁で入力してください');return}
   }
   for(const fd of c.fields.filter(f=>f.type==='date6o')){
@@ -1230,9 +1237,6 @@ function entryValues(e){
     if(Array.isArray(v)){if(v.length)vals.push(v.join(' '))}
     else vals.push(String(v));
   });
-  statlines(e.cat).forEach(fd=>{
-    if(fd.k==='bill')vals.push(valid6(e.data[fd.dk]||'')?'入金済み':'未入金');
-  });
   return vals;
 }
 let urgOn=false,impOn=false,showDone=false,ankenFilter='';
@@ -1286,10 +1290,6 @@ function summaryHTML(e){
   statlines(e.cat).forEach(fd=>{
     const sv=d[fd.sk]||fd.options[0];
     badges+=`<span class="badge ${sv===fd.options[1]?'bgreen':'bred'}">${esc(sv)}</span>`;
-    if(fd.k==='bill'){
-      if(valid6(d[fd.dk]||''))badges+=`<span class="badge bgreen">入金済み</span>`;
-      else if(sv===fd.options[1])badges+=`<span class="badge bred">未入金</span>`;
-    }
   });
   if(d.anken)badges+=`<span class="badge">${esc(String(d.anken).slice(0,14))}</span>`;
   const persons=fs.filter(f=>f.type==='person'&&d[f.k]&&f.k!=='delegate').map(f=>d[f.k]);
@@ -1334,10 +1334,10 @@ function openDetail(id){
   b.innerHTML=catFields(e.cat).filter(f=>f.k!=='date').map(f=>{
     if(f.type==='statline'){
       const sv=e.data[f.sk]||f.options[0];
-      const dv=e.data[f.dk]?iso6(e.data[f.dk]):'—';
+      const dspan=f.dk?`<span style="font-size:.85rem;color:var(--sub)">${f.dlabel.replace('(6桁)','')}: <span class="num">${e.data[f.dk]?iso6(e.data[f.dk]):'—'}</span></span>`:'';
       return `<div class="dl"><div class="k">${f.label}</div><div class="v">
         <span class="bpill ${sv===f.options[1]?'green':'red'}">${esc(sv)}</span>
-        <span style="font-size:.85rem;color:var(--sub)">${f.dlabel.replace('(6桁)','')}: <span class="num">${dv}</span></span></div></div>`;
+        ${dspan}</div></div>`;
     }
     let v=e.data[f.k];
     if(v===''||v===undefined||v===null)return'';
@@ -1359,7 +1359,7 @@ function entryText(e){
     if(f.type==='statline'){
       const sv=e.data[f.sk]||f.options[0];
       lines.push(f.label+': '+sv);
-      if(e.data[f.dk])lines.push(f.dlabel.replace('(6桁)','')+': '+iso6(e.data[f.dk]));
+      if(f.dk&&e.data[f.dk])lines.push(f.dlabel.replace('(6桁)','')+': '+iso6(e.data[f.dk]));
       return;
     }
     let v=e.data[f.k];
@@ -1377,10 +1377,12 @@ function entryText(e){
 function copyOne(){const e=entries.find(x=>x.id===detailId);copyText(entryText(e),'1件コピーしました')}
 function editOne(){
   const e=entries.find(x=>x.id===detailId);
-  activeCat=e.cat;editingId=e.id;
-  renderTabs();renderFields(e.data);closeDetail();
-  window.scrollTo({top:0});
-  toast('入力欄に読み込みました。修正して保存してください');
+  guardLeave(()=>{
+    activeCat=e.cat;editingId=e.id;
+    renderTabs();renderFields(e.data);closeDetail();
+    window.scrollTo({top:0});
+    toast('入力欄に読み込みました。修正して保存してください');
+  });
 }
 function deleteOne(){
   const id=detailId;
@@ -1425,6 +1427,17 @@ function toast(msg){
 function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}
 function escAttr(s){return esc(s).replace(/"/g,'&quot;')}
 
+(function(){
+  const sb=document.getElementById('searchBox');
+  let bypass=false;
+  sb.addEventListener('focus',()=>{
+    if(bypass){bypass=false;return}
+    if(needGuard()){
+      sb.blur();
+      askConfirm('区分を選んでいません。保存されていませんが、次の画面に行っていいですか?','移動する',()=>{bypass=true;sb.focus();});
+    }
+  });
+})();
 loadLocal();
 migrate();
 renderTabs();renderFields();renderTimeline();
