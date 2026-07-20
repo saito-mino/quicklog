@@ -214,6 +214,7 @@ body.editmode .gtab.active .del{display:inline}
     <button class="fbtn" id="fb_imp" onclick="toggleImp()">重要</button>
     <button class="fbtn" id="fb_done" onclick="toggleDone()">完了を含む</button>
     <button class="fbtn" id="fb_anken" onclick="openAnkenFilter()">案件</button>
+    <button class="fbtn" id="fb_arch" onclick="toggleArch()">アーカイブ</button>
   </div>
   <div class="hint">※ スペース区切りでAND検索(例:「物件 中村」=物件の中の中村様)。「未請求」「未完了」「緊急」などでも絞れます。検索中に「全件コピー」を押すと絞り込んだ結果だけをコピー(AI貼り付け用)</div>
 
@@ -246,11 +247,7 @@ body.editmode .gtab.active .del{display:inline}
     <div class="detail-cat" id="detailCat"></div>
     <div class="detail-meta" id="detailMeta"></div>
     <div id="detailBody"></div>
-    <div class="detail-actions">
-      <button onclick="copyOne()">この1件をコピー</button>
-      <button onclick="editOne()">編集する</button>
-      <button class="danger" onclick="deleteOne()">削除</button>
-    </div>
+    <div class="detail-actions" id="detailActions"></div>
   </div>
 </div>
 
@@ -288,6 +285,17 @@ body.editmode .gtab.active .del{display:inline}
   </div>
 </div>
 
+<!-- 物件ピッカー -->
+<div class="overlay" id="bukkenOverlay" onclick="if(event.target===this)closeBukkenPicker()">
+  <div class="sheet">
+    <h3><span>物件を選択</span><button class="closebtn" onclick="closeBukkenPicker()">×</button></h3>
+    <input type="text" id="bukkenSearch" placeholder="物件を検索" oninput="renderBukkenList()" style="margin-bottom:8px">
+    <div style="margin-bottom:10px"><button class="fbtn" id="fb_bukkendone" onclick="toggleBukkenDone()">完了した物件を含む</button></div>
+    <div class="plist" id="bukkenList"></div>
+    <div class="paddrow"><button style="flex:1" onclick="pickBukken('')">紐づけを解除(なし)</button></div>
+  </div>
+</div>
+
 <!-- 合言葉入力(初回のみ) -->
 <div class="dlg-overlay" id="keyOverlay">
   <div class="dlg">
@@ -311,7 +319,7 @@ const PALETTE=['#3B6FB5','#7B5EA7','#5F7F5F','#9E5E8A','#A84A3B','#4E6E9E','#8A7
 
 /* =============== 同期レイヤー(GAS+スプレッドシート) =============== */
 const GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
-const LS_KEY='ql_key', LS_CACHE='ql_cache_v10', LS_OUTBOX='ql_outbox_v1';
+const LS_KEY='ql_key', LS_CACHE='ql_cache_v12', LS_OUTBOX='ql_outbox_v1';
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 let apiKey=lsGet(LS_KEY)||'';
@@ -326,7 +334,7 @@ function loadLocal(){
     let c=JSON.parse(lsGet(LS_CACHE)||'null');
     if(!c){
       /* 旧バージョンのキャッシュから記録・人物リストだけ引き継ぐ(タブ構成は新定義を使う) */
-      const old=JSON.parse(lsGet('ql_cache_v9')||lsGet('ql_cache_v8')||lsGet('ql_cache_v7')||lsGet('ql_cache_v6')||lsGet('ql_cache_v5')||lsGet('ql_cache_v4')||lsGet('ql_cache_v3')||lsGet('ql_cache_v1')||'null');
+      const old=JSON.parse(lsGet('ql_cache_v11')||lsGet('ql_cache_v10')||lsGet('ql_cache_v9')||lsGet('ql_cache_v8')||lsGet('ql_cache_v7')||lsGet('ql_cache_v6')||lsGet('ql_cache_v5')||lsGet('ql_cache_v4')||lsGet('ql_cache_v3')||lsGet('ql_cache_v1')||'null');
       if(old)c={entries:old.entries,groups:old.groups,recentPeople:old.recentPeople};
     }
     if(c){
@@ -356,7 +364,7 @@ function migrate(){
     }
     const d=en.data;
     /* 廃止した備考の中身を内容欄へ併合(見えなくならないように) */
-    if(['task','anken','shukan'].includes(en.cat)&&d.note){d.content=[d.content,d.note].filter(Boolean).join('\n');delete d.note}
+    if(['task','shukan'].includes(en.cat)&&d.note){d.content=[d.content,d.note].filter(Boolean).join('\n');delete d.note}
     if(['jikan','shushi'].includes(en.cat)&&d.note){d.content=[d.content,d.note].filter(Boolean).join(' / ');delete d.note}
     if(en.cat==='bukken'&&d.note){d.free=[d.free,d.note].filter(Boolean).join('\n');delete d.note}
     /* 旧A〜D区分を緊急・重要フラグへ変換 */
@@ -403,6 +411,9 @@ function colsOf(e){
       case 'ankenlink':
         if(v)others.push('案件: '+v);
         break;
+      case 'bukkenlink':
+        if(v)others.push('物件: '+v);
+        break;
       case 'personlist':
         if(v&&v.length)others.push(oLabel(f)+': '+v.join('、'));
         break;
@@ -442,6 +453,7 @@ function colsOf(e){
         break;
     }
   });
+  if(e.arch)others.push('アーカイブ済み');
   c.other=others.join(' / ');
   return c;
 }
@@ -450,7 +462,7 @@ let cfgTimer=null;
 function cfgSync(){
   clearTimeout(cfgTimer);
   cfgTimer=setTimeout(()=>{
-    enqueue({action:'config',name:'cats9',value:cats});
+    enqueue({action:'config',name:'cats11',value:cats});
     enqueue({action:'config',name:'groups',value:groups});
     enqueue({action:'config',name:'recent',value:recentPeople});
   },1200);
@@ -476,7 +488,7 @@ async function fetchAll(){
     sv.sort((a,b)=>(b.ts||0)-(a.ts||0));
     entries=sv;
     if(j.config){
-      if(Array.isArray(j.config.cats9)&&j.config.cats9.length)cats=j.config.cats9;
+      if(Array.isArray(j.config.cats11)&&j.config.cats11.length)cats=j.config.cats11;
       if(Array.isArray(j.config.groups)&&j.config.groups.length)groups=j.config.groups;
       if(Array.isArray(j.config.recent))recentPeople=j.config.recent;
     }
@@ -527,6 +539,7 @@ let cats=[
    {k:'done',label:'完了',type:'statline',sk:'doneStat',options:['未完了','完了'],dk:'doneDate',dlabel:'完了日',autoDate:true,row:'h1'},
    {k:'partner',label:'相手方',type:'person'},
    {k:'anken',label:'案件に紐づけ(任意)',type:'ankenlink'},
+   {k:'bukkenref',label:'物件に紐づけ(任意)',type:'bukkenlink'},
    {k:'prio',label:'区分(必須)',type:'flags',required:true,options:['緊急','重要','なし'],cls:{'緊急':'prio-a','重要':'prio-b'}},
    {k:'content',label:'内容',type:'bigtext',ph:'内容をパパッと書く',main:1}]},
  {id:'shushi',name:'収支',color:'#1F5C40',text:'#fff',fields:[
@@ -537,6 +550,8 @@ let cats=[
  {id:'jikan',name:'時間',color:'#5C4326',text:'#fff',fields:[
    {k:'date',label:'日付',type:'date6'},
    {k:'content',label:'内容(タイトル)',type:'text',ph:'例:更新申請の書類作成',main:1},
+   {k:'anken',label:'案件に紐づけ(任意)',type:'ankenlink'},
+   {k:'bukkenref',label:'物件に紐づけ(任意)',type:'bukkenlink'},
    {k:'start',label:'開始時間(4桁)',type:'time4',row:'tm'},
    {k:'end',label:'終了時間(4桁)',type:'time4',row:'tm'},
    {k:'minutes',label:'所要時間(自動計算・直接入力も可)',type:'minutes'}]},
@@ -553,7 +568,8 @@ let cats=[
    {k:'date',label:'発生日',type:'date6',row:'h1'},
    {k:'partner',label:'相手方',type:'person'},
    {k:'amount',label:'金額・報酬(円)',type:'amount'},
-   {k:'content',label:'内容',type:'textarea',ph:'受けた仕事の内容',main:1},
+   {k:'content',label:'内容',type:'textarea',ph:'受けた仕事の内容を手短に',main:1},
+   {k:'note',label:'備考',type:'textarea',ph:'考慮すべきこと・気になる点など(任意)'},
    {k:'prio',label:'区分(必須)',type:'flags',required:true,options:['緊急','重要','なし'],cls:{'緊急':'prio-a','重要':'prio-b'}},
    {k:'engage',label:'スポット / 継続',type:'select',options:['スポット','継続'],hint:'スポット=高く厳しく / 継続=緩く安く'},
    {k:'source',label:'紹介 / 直接',type:'select',options:['紹介','直接']},
@@ -808,6 +824,7 @@ function fieldHTML(fd,vals){
     }
     case 'person':return wrap(`<button class="personbtn ${v?'':'empty'}" id="f_${fd.k}" onclick="openPicker('f_${fd.k}','${fd.label}')">${esc(v||'タップして選択')}</button>`);
     case 'ankenlink':return wrap(`<button class="personbtn ${v?'':'empty'}" id="f_${fd.k}" onclick="openAnkenPicker('${fd.k}')">${esc(v||'タップして選択(任意)')}</button>`);
+    case 'bukkenlink':return wrap(`<button class="personbtn ${v?'':'empty'}" id="f_${fd.k}" onclick="openBukkenPicker('${fd.k}')">${esc(v||'タップして選択(任意)')}</button>`);
     case 'date6o':return wrap(`<input type="text" class="date6 num" id="f_${fd.k}" inputmode="numeric" maxlength="6" placeholder="未入力" value="${escAttr(v||'')}">`);
     case 'time4':return wrap(`<input type="text" class="date6 num" id="f_${fd.k}" inputmode="numeric" maxlength="4" placeholder="例:1400" value="${escAttr(v||'')}">`);
     case 'personlist':return wrap(`<div class="plchips" id="f_${fd.k}"></div>`);
@@ -994,7 +1011,7 @@ function readFields(){
       return;
     }
     const e=document.getElementById('f_'+fd.k);if(!e)return;
-    if(fd.type==='person'||fd.type==='ankenlink'){d[fd.k]=e.classList.contains('empty')?'':e.textContent}
+    if(fd.type==='person'||fd.type==='ankenlink'||fd.type==='bukkenlink'){d[fd.k]=e.classList.contains('empty')?'':e.textContent}
     else if(fd.type==='select'){d[fd.k]=selState[fd.k]}
     else if(fd.type==='amount'||fd.type==='minutes'||fd.type==='seconds'){d[fd.k]=e.value===''?'':Number(e.value)}
     else{d[fd.k]=e.value.trim()}
@@ -1070,7 +1087,7 @@ function closeAnkenPicker(){document.getElementById('ankenOverlay').classList.re
 function renderAnkenList(){
   const q=document.getElementById('ankenSearch').value.trim();
   const el=document.getElementById('ankenList');el.innerHTML='';
-  const list=entries.filter(e=>e.cat==='anken')
+  const list=entries.filter(e=>e.cat==='anken'&&!e.arch)
     .filter(e=>ankenShowDone||(e.data||{}).doneStat!=='完了')
     .filter(e=>!q||ankenLabel(e).includes(q)||entryValues(e).join(' ').includes(q));
   if(!list.length){el.innerHTML='<div style="color:var(--sub);font-size:.85rem;padding:14px 4px">該当する案件がありません(完了済みは「完了した案件を含む」で表示されます)。</div>'}
@@ -1095,6 +1112,52 @@ function pickAnken(label){
     else{e.textContent='タップして選択(任意)';e.classList.add('empty')}
   }
   closeAnkenPicker();
+}
+
+/* ============== 物件ピッカー(紐づけ用) ============== */
+let bukkenTarget=null,bukkenShowDone=false;
+function bukkenPickLabel(en){
+  const d=en.data||{};
+  const head=String(d.area||d.free||d.budget||'').split('\n')[0];
+  return ((d.partner?d.partner+'｜':'')+head).slice(0,40)||'(内容なし)';
+}
+function toggleBukkenDone(){
+  bukkenShowDone=!bukkenShowDone;
+  const b=document.getElementById('fb_bukkendone');
+  if(b)b.className='fbtn'+(bukkenShowDone?' on':'');
+  renderBukkenList();
+}
+function openBukkenPicker(fieldK){
+  bukkenTarget=fieldK;
+  bukkenShowDone=false;
+  const b=document.getElementById('fb_bukkendone');
+  if(b)b.className='fbtn';
+  document.getElementById('bukkenSearch').value='';
+  renderBukkenList();
+  document.getElementById('bukkenOverlay').classList.add('open');
+}
+function closeBukkenPicker(){document.getElementById('bukkenOverlay').classList.remove('open')}
+function renderBukkenList(){
+  const q=document.getElementById('bukkenSearch').value.trim();
+  const el=document.getElementById('bukkenList');el.innerHTML='';
+  const list=entries.filter(e=>e.cat==='bukken'&&!e.arch)
+    .filter(e=>bukkenShowDone||(e.data||{}).doneStat!=='完了')
+    .filter(e=>!q||bukkenPickLabel(e).includes(q)||entryValues(e).join(' ').includes(q));
+  if(!list.length){el.innerHTML='<div style="color:var(--sub);font-size:.85rem;padding:14px 4px">該当する物件がありません(完了済みは「完了した物件を含む」で表示されます)。</div>'}
+  list.forEach(e=>{
+    const b=document.createElement('button');
+    b.textContent=bukkenPickLabel(e);
+    b.onclick=()=>pickBukken(bukkenPickLabel(e));
+    el.appendChild(b);
+  });
+}
+function pickBukken(label){
+  const e=document.getElementById('f_'+bukkenTarget);
+  if(e){
+    if(label){e.textContent=label;e.classList.remove('empty')}
+    else{e.textContent='タップして選択(任意)';e.classList.add('empty')}
+  }
+  closeBukkenPicker();
 }
 
 /* ============== 人物ピッカー ============== */
@@ -1203,7 +1266,7 @@ function renamePerson(gid,oldName){
       fs.forEach(f=>{
         if(f.type==='person'&&d[f.k]===oldName){d[f.k]=nm;hit=true}
         if(f.type==='personlist'&&Array.isArray(d[f.k])&&d[f.k].includes(oldName)){d[f.k]=d[f.k].map(x=>x===oldName?nm:x);hit=true}
-        if(f.type==='ankenlink'&&typeof d[f.k]==='string'&&d[f.k].includes(oldName)){d[f.k]=d[f.k].split(oldName).join(nm);hit=true}
+        if((f.type==='ankenlink'||f.type==='bukkenlink')&&typeof d[f.k]==='string'&&d[f.k].includes(oldName)){d[f.k]=d[f.k].split(oldName).join(nm);hit=true}
       });
       if(hit){changed++;enqueue({action:'save',entry:en,cols:colsOf(en)},true)}
     });
@@ -1239,27 +1302,34 @@ function entryValues(e){
   });
   return vals;
 }
-let urgOn=false,impOn=false,showDone=false,ankenFilter='';
+let urgOn=false,impOn=false,showDone=false,ankenFilter='',archOn=false;
 function toggleUrg(){urgOn=!urgOn;paintFilters();renderTimeline()}
 function toggleImp(){impOn=!impOn;paintFilters();renderTimeline()}
 function toggleDone(){showDone=!showDone;paintFilters();renderTimeline()}
+function toggleArch(){archOn=!archOn;paintFilters();renderTimeline()}
 function paintFilters(){
   const set=(id,on)=>{const el=document.getElementById(id);if(el)el.className='fbtn'+(on?' on':'')};
   set('fb_urg',urgOn);
   set('fb_imp',impOn);
   set('fb_done',showDone);
   set('fb_anken',!!ankenFilter);
+  set('fb_arch',archOn);
   const fa=document.getElementById('fb_anken');
   if(fa)fa.textContent=ankenFilter?('案件: '+ankenFilter.slice(0,8)+(ankenFilter.length>8?'…':'')):'案件';
 }
 function passFilters(e){
   const d=e.data||{};
-  if(ankenFilter){
-    /* 案件フィルター中: その案件本体+紐づく記録を、完了も含めて全部表示 */
-    const linked=(e.cat==='anken'&&ankenLabel(e)===ankenFilter)||(typeof d.anken==='string'&&d.anken===ankenFilter);
-    if(!linked)return false;
+  if(archOn){
+    if(!e.arch)return false;
   }else{
-    if(!showDone&&d.doneStat==='完了')return false;
+    if(e.arch)return false;
+    if(ankenFilter){
+      /* 案件フィルター中: その案件本体+紐づく記録を、完了も含めて全部表示 */
+      const linked=(e.cat==='anken'&&ankenLabel(e)===ankenFilter)||(typeof d.anken==='string'&&d.anken===ankenFilter);
+      if(!linked)return false;
+    }else{
+      if(!showDone&&d.doneStat==='完了')return false;
+    }
   }
   const p=Array.isArray(d.prio)?d.prio:[];
   if(urgOn&&!p.includes('緊急'))return false;
@@ -1268,7 +1338,8 @@ function passFilters(e){
 }
 const CAT_ORDER={task:1,anken:2,bukken:3,houjin:4,kojin:5,shushi:6,jikan:7,shukan:8,genkin:9};
 function catOrder(e){return CAT_ORDER[e.cat]||99}
-function sortForList(list){return list.sort((a,b)=>catOrder(a)-catOrder(b)||((b.ts||0)-(a.ts||0)))}
+function doneRank(e){return (e.data&&e.data.doneStat==='完了')?1:0}
+function sortForList(list){return list.sort((a,b)=>catOrder(a)-catOrder(b)||doneRank(a)-doneRank(b)||((b.ts||0)-(a.ts||0)))}
 function matches(e,q){
   const hay=[catName(e.cat),...entryValues(e)].join(' ');
   return q.split(/[\s\u3000]+/).filter(Boolean).every(t=>hay.includes(t));
@@ -1292,6 +1363,8 @@ function summaryHTML(e){
     badges+=`<span class="badge ${sv===fd.options[1]?'bgreen':'bred'}">${esc(sv)}</span>`;
   });
   if(d.anken)badges+=`<span class="badge">${esc(String(d.anken).slice(0,14))}</span>`;
+  if(d.bukkenref)badges+=`<span class="badge">${esc(String(d.bukkenref).slice(0,14))}</span>`;
+  if(e.arch)badges+=`<span class="badge">アーカイブ</span>`;
   const persons=fs.filter(f=>f.type==='person'&&d[f.k]&&f.k!=='delegate').map(f=>d[f.k]);
   let parts=[];
   if(persons.length)parts.push('<b>'+esc(persons.join(' / '))+'</b>');
@@ -1350,6 +1423,12 @@ function openDetail(id){
     if(f.type==='select'&&f.labels&&f.labels[v])v=f.labels[v]+'('+v+')';
     return `<div class="dl"><div class="k">${f.label.replace(/(＋.*)/,'').trim()}</div><div class="v">${esc(v)}</div></div>`;
   }).join('');
+  const acts=document.getElementById('detailActions');
+  if(e.arch){
+    acts.innerHTML='<button onclick="copyOne()">この1件をコピー</button><button onclick="unarchiveOne()">一覧に戻す</button><button class="danger" onclick="hardDeleteOne()">完全削除</button>';
+  }else{
+    acts.innerHTML='<button onclick="copyOne()">この1件をコピー</button><button onclick="editOne()">編集する</button><button class="danger" onclick="archiveOne()">アーカイブ</button>';
+  }
   document.getElementById('detailOverlay').classList.add('open');
 }
 function closeDetail(){document.getElementById('detailOverlay').classList.remove('open')}
@@ -1384,13 +1463,32 @@ function editOne(){
     toast('入力欄に読み込みました。修正して保存してください');
   });
 }
-function deleteOne(){
+function archiveOne(){
   const id=detailId;
-  askConfirm('この記録を削除しますか?','削除する',()=>{
+  askConfirm('この記録をアーカイブしますか?(一覧から見えなくなりますが、データは残ります)','アーカイブする',()=>{
+    const e=entries.find(x=>String(x.id)===String(id));
+    if(!e)return;
+    e.arch=1;
+    saveLocal();
+    enqueue({action:'save',entry:e,cols:colsOf(e)});
+    closeDetail();renderTimeline();toast('アーカイブしました(フィルターの「アーカイブ」で見られます)');
+  });
+}
+function unarchiveOne(){
+  const e=entries.find(x=>String(x.id)===String(detailId));
+  if(!e)return;
+  delete e.arch;
+  saveLocal();
+  enqueue({action:'save',entry:e,cols:colsOf(e)});
+  closeDetail();renderTimeline();toast('一覧に戻しました');
+}
+function hardDeleteOne(){
+  const id=detailId;
+  askConfirm('完全に削除しますか?(元に戻せません)','完全削除する',()=>{
     entries=entries.filter(x=>String(x.id)!==String(id));
     saveLocal();
     enqueue({action:'delete',id:id});
-    closeDetail();renderTimeline();toast('削除しました');
+    closeDetail();renderTimeline();toast('完全に削除しました');
   });
 }
 function copyAll(){
