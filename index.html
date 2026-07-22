@@ -129,6 +129,7 @@ textarea.big{min-height:170px}
 .amt-in{color:var(--ok);font-weight:700}
 .amt-out{color:var(--danger);font-weight:700}
 .empty-timeline{color:var(--sub);font-size:.85rem;text-align:center;padding:30px 0}
+.morebtn{width:100%;border:1px dashed var(--sub);background:none;border-radius:10px;padding:12px;font-size:.85rem;color:var(--sub);cursor:pointer;font-family:inherit;margin-top:4px}
 
 /* オーバーレイ */
 .overlay{display:none;position:fixed;inset:0;background:rgba(35,42,53,.45);z-index:50;align-items:flex-end;justify-content:center}
@@ -206,7 +207,7 @@ body.editmode .gtab.active .del{display:inline}
   </div>
 
   <div class="toolbar">
-    <input type="text" id="searchBox" placeholder="キーワード検索(名前・内容・種別・ステータス等)" oninput="renderTimeline()">
+    <input type="text" id="searchBox" placeholder="キーワード検索(名前・内容・種別・ステータス等)" oninput="searchInput()">
     <button class="copyall" onclick="copyAll()">全件コピー</button>
   </div>
   <div class="filterrow">
@@ -1101,6 +1102,7 @@ function renderAnkenList(){
 function pickAnken(label){
   if(ankenTarget==='__filter__'){
     ankenFilter=label||'';
+    listLimit=20;
     paintFilters();renderTimeline();
     closeAnkenPicker();
     if(label)toast('案件「'+label.slice(0,12)+'…」の関連記録を表示中');
@@ -1303,10 +1305,12 @@ function entryValues(e){
   return vals;
 }
 let urgOn=false,impOn=false,showDone=false,ankenFilter='',archOn=false;
-function toggleUrg(){urgOn=!urgOn;paintFilters();renderTimeline()}
-function toggleImp(){impOn=!impOn;paintFilters();renderTimeline()}
-function toggleDone(){showDone=!showDone;paintFilters();renderTimeline()}
-function toggleArch(){archOn=!archOn;paintFilters();renderTimeline()}
+let listLimit=20;
+function searchInput(){listLimit=20;renderTimeline()}
+function toggleUrg(){urgOn=!urgOn;listLimit=20;paintFilters();renderTimeline()}
+function toggleImp(){impOn=!impOn;listLimit=20;paintFilters();renderTimeline()}
+function toggleDone(){showDone=!showDone;listLimit=20;paintFilters();renderTimeline()}
+function toggleArch(){archOn=!archOn;listLimit=20;paintFilters();renderTimeline()}
 function paintFilters(){
   const set=(id,on)=>{const el=document.getElementById(id);if(el)el.className='fbtn'+(on?' on':'')};
   set('fb_urg',urgOn);
@@ -1385,7 +1389,8 @@ function renderTimeline(){
   const el=document.getElementById('timeline');el.innerHTML='';
   const list=sortForList(entries.filter(passFilters).filter(e=>!q||matches(e,q)));
   if(!list.length){el.innerHTML='<div class="empty-timeline">表示できる記録がありません(完了分は「完了を含む」で表示されます)</div>';return}
-  list.forEach(e=>{
+  const shown=list.slice(0,listLimit);
+  shown.forEach(e=>{
     const s=summaryHTML(e);
     const d=document.createElement('div');d.className='rec';
     d.innerHTML=`<div class="tabmark" style="background:${catColor(e.cat)}"></div>
@@ -1396,6 +1401,13 @@ function renderTimeline(){
     d.onclick=()=>openDetail(e.id);
     el.appendChild(d);
   });
+  if(list.length>shown.length){
+    const m=document.createElement('button');
+    m.className='morebtn';
+    m.textContent='さらに表示(残り '+(list.length-shown.length)+' 件)';
+    m.onclick=()=>{listLimit+=50;renderTimeline()};
+    el.appendChild(m);
+  }
 }
 function openDetail(id){
   detailId=id;
