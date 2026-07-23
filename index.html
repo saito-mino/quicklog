@@ -130,6 +130,10 @@ textarea.big{min-height:170px}
 .amt-out{color:var(--danger);font-weight:700}
 .empty-timeline{color:var(--sub);font-size:.85rem;text-align:center;padding:30px 0}
 .ver{font-size:.62rem;color:var(--sub);font-weight:700;margin-left:6px;letter-spacing:.05em}
+.durrow{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;align-items:center}
+.durlbl{font-size:.68rem;color:var(--sub);font-weight:700}
+.durrow button{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:6px 10px;font-size:.78rem;cursor:pointer;font-family:inherit;color:var(--sub)}
+.durrow button.on{background:var(--ok);border-color:var(--ok);color:#fff;font-weight:700}
 .morebtn{width:100%;border:1px dashed var(--sub);background:none;border-radius:10px;padding:12px;font-size:.85rem;color:var(--sub);cursor:pointer;font-family:inherit;margin-top:4px}
 #kanriBanner{margin:0 0 10px;padding:10px 14px;border-radius:10px;font-size:.85rem;font-weight:700;cursor:pointer;line-height:1.5}
 #kanriBanner.soon{background:#FFF6DC;color:#7A5C00;border:1px solid #E0AA00}
@@ -349,8 +353,8 @@ const PALETTE=['#3B6FB5','#7B5EA7','#5F7F5F','#9E5E8A','#A84A3B','#4E6E9E','#8A7
 
 /* =============== 同期レイヤー(GAS+スプレッドシート) =============== */
 const GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
-const APP_VER='v30';
-const LS_KEY='ql_key', LS_CACHE='ql_cache_v15', LS_OUTBOX='ql_outbox_v1';
+const APP_VER='v31';
+const LS_KEY='ql_key', LS_CACHE='ql_cache_v16', LS_OUTBOX='ql_outbox_v1';
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 let apiKey=lsGet(LS_KEY)||'';
@@ -365,7 +369,7 @@ function loadLocal(){
     let c=JSON.parse(lsGet(LS_CACHE)||'null');
     if(!c){
       /* 旧バージョンのキャッシュから記録・人物リストだけ引き継ぐ(タブ構成は新定義を使う) */
-      const old=JSON.parse(lsGet('ql_cache_v14')||lsGet('ql_cache_v13')||lsGet('ql_cache_v12')||lsGet('ql_cache_v11')||lsGet('ql_cache_v10')||lsGet('ql_cache_v9')||lsGet('ql_cache_v8')||lsGet('ql_cache_v7')||lsGet('ql_cache_v6')||lsGet('ql_cache_v5')||lsGet('ql_cache_v4')||lsGet('ql_cache_v3')||lsGet('ql_cache_v1')||'null');
+      const old=JSON.parse(lsGet('ql_cache_v15')||lsGet('ql_cache_v14')||lsGet('ql_cache_v13')||lsGet('ql_cache_v12')||lsGet('ql_cache_v11')||lsGet('ql_cache_v10')||lsGet('ql_cache_v9')||lsGet('ql_cache_v8')||lsGet('ql_cache_v7')||lsGet('ql_cache_v6')||lsGet('ql_cache_v5')||lsGet('ql_cache_v4')||lsGet('ql_cache_v3')||lsGet('ql_cache_v1')||'null');
       if(old)c={entries:old.entries,groups:old.groups,recentPeople:old.recentPeople};
     }
     if(c){
@@ -490,6 +494,9 @@ function colsOf(e){
         break;
     }
   });
+  if(d.doneAt)others.push('完了時刻: '+String(d.doneAt).slice(11,16));
+  if(d.manualDone)others.push('手動完了日: '+d.manualDone);
+  if(d.durMin)others.push('所要: '+d.durMin+'分');
   if(e.arch)others.push('アーカイブ済み');
   c.other=others.join(' / ');
   return c;
@@ -499,7 +506,7 @@ let cfgTimer=null;
 function cfgSync(){
   clearTimeout(cfgTimer);
   cfgTimer=setTimeout(()=>{
-    enqueue({action:'config',name:'cats14',value:cats});
+    enqueue({action:'config',name:'cats15',value:cats});
     enqueue({action:'config',name:'groups',value:groups});
     enqueue({action:'config',name:'recent',value:recentPeople});
   },1200);
@@ -525,7 +532,7 @@ async function fetchAll(){
     sv.sort((a,b)=>(b.ts||0)-(a.ts||0));
     entries=sv;
     if(j.config){
-      if(Array.isArray(j.config.cats14)&&j.config.cats14.length)cats=j.config.cats14;
+      if(Array.isArray(j.config.cats15)&&j.config.cats15.length)cats=j.config.cats15;
       if(Array.isArray(j.config.groups)&&j.config.groups.length)groups=j.config.groups;
       if(Array.isArray(j.config.recent))recentPeople=j.config.recent;
     }
@@ -615,6 +622,9 @@ let cats=[
    {k:'seconds',label:'秒数',type:'seconds',showIf:{k:'kind',vs:['DASH','筋トレ','ストレッチ']}},
    {k:'amount',label:'節約額(円)',type:'amount',showIf:{k:'kind',v:'節約'}},
    {k:'content',label:'内容',type:'textarea',ph:'メモ(任意)',main:1}]},
+ {id:'pf',name:'日記',color:'#3F4A54',text:'#fff',fields:[
+   {k:'partner',label:'誰について(任意)',type:'person'},
+   {k:'content',label:'日記・メモ',type:'bigtext',ph:'日々の出来事・気づき・人物メモを自由に',main:1}]},
  {id:'shushi',name:'収支',color:'#1F5C40',text:'#fff',fields:[
    {k:'date',label:'日付',type:'date6'},
    {k:'io',label:'収入 / 支出',type:'select',options:['収入','支出'],def:'支出',cls:{'収入':'io-in','支出':'io-out'}},
@@ -678,13 +688,10 @@ let cats=[
    {k:'sm2',label:'②',type:'date6o',row:'m'},
    {k:'sm3',label:'③',type:'date6o',row:'m'},
    {k:'note',label:'備考',type:'textarea',ph:'好み・メモ(任意)'}]},
- {id:'orei',name:'ご恩',color:'#DFEDE6',text:'#232A35',fields:[
+ {id:'orei',name:'御恩',color:'#DFEDE6',text:'#232A35',fields:[
    {k:'date',label:'いつ',type:'date6'},
    {k:'partner',label:'誰に(してもらった相手)',type:'person'},
    {k:'content',label:'何をしてもらったか',type:'textarea',ph:'してもらったこと・お礼の状況など',main:1}]},
- {id:'pf',name:'EP',color:'#E9E2F3',text:'#232A35',fields:[
-   {k:'partner',label:'誰のエピソードか',type:'person'},
-   {k:'content',label:'エピソード・人物メモ',type:'bigtext',ph:'顧客の人物像・家族・好み・印象的な出来事などを自由に',main:1}]},
  {id:'genkin',name:'残高',color:'#F1E5C2',text:'#232A35',fields:[
    {k:'date',label:'いつ時点',type:'date6'},
    {k:'amount',label:'現金残高(円)',type:'amount',main:1},
@@ -748,6 +755,20 @@ function confCancel(){
 }
 
 /* ---- 日付ユーティリティ(6桁 YYMMDD) ---- */
+function nowStamp(){
+  const t=new Date();
+  const p=n=>String(n).padStart(2,'0');
+  return t.getFullYear()+'-'+p(t.getMonth()+1)+'-'+p(t.getDate())+' '+p(t.getHours())+':'+p(t.getMinutes());
+}
+function applyDoneMeta(d,prevData){
+  if(d.doneStat==='完了'){
+    d.doneAt=(prevData&&prevData.doneAt)?prevData.doneAt:nowStamp();
+    const da=String(d.doneAt).slice(0,10);
+    const dd=valid6(d.doneDate||'')?iso6(d.doneDate):'';
+    if(dd&&dd!==da)d.manualDone=dd;
+  }
+  return d;
+}
 function today6(){
   const d=new Date();
   return String(d.getFullYear()).slice(2)+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
@@ -902,6 +923,8 @@ function renderFields(vals={}){
     bindDate6('f_'+x.k+'_d',true);
     paintStat(x.k);
   });
+  durState=+(vals.durMin)||0;
+  paintDur();
   c.fields.filter(x=>x.type==='personlist').forEach(x=>renderPL(x.k));
   applyShowIf();applyBigIf();
   const main=c.fields.find(x=>x.main);
@@ -944,13 +967,14 @@ function fieldHTML(fd,vals){
       const dpart=fd.dk?`
         <div class="sl"><label>${fd.dlabel}</label>
           <input type="text" class="date6 num" id="f_${fd.k}_d" inputmode="numeric" maxlength="6" placeholder="未入力" value="${escAttr(vals[fd.dk]||'')}"></div>`:'';
+      const durpart=(fd.sk==='doneStat')?`<div class="durrow" id="dur_${fd.k}" style="display:${sv===fd.options[1]?'flex':'none'}"><span class="durlbl">所要(任意):</span>${[[15,'15分'],[30,'30分'],[60,'1時間'],[120,'2時間'],[240,'半日'],[480,'1日']].map(x=>`<button type="button" data-m="${x[0]}" onclick="setDur(${x[0]})">${x[1]}</button>`).join('')}</div>`:'';
       return `<div class="field" id="w_${fd.k}"><div class="statline">
         <div class="sl"><label>${fd.label}</label>
           <select id="f_${fd.k}_s" onchange="statChange('${fd.k}')">
             <option${sv===fd.options[0]?' selected':''}>${esc(fd.options[0])}</option>
             <option${sv===fd.options[1]?' selected':''}>${esc(fd.options[1])}</option>
           </select></div>${dpart}
-      </div></div>`;
+      </div>${durpart}</div>`;
     }
   }
   return '';
@@ -977,6 +1001,11 @@ function renderPL(k){
   el.appendChild(add);
 }
 function statFd(k){return catOf(activeCat).fields.find(x=>x.k===k&&x.type==='statline')}
+let durState=0;
+function setDur(m){durState=(durState===m)?0:m;paintDur()}
+function paintDur(){
+  document.querySelectorAll('.durrow button').forEach(b=>{b.className=(+b.dataset.m===durState)?'on':''});
+}
 function statChange(k){
   const fd=statFd(k);if(!fd)return;
   const s=document.getElementById('f_'+k+'_s');
@@ -984,6 +1013,10 @@ function statChange(k){
     const d=document.getElementById('f_'+k+'_d');
     if(s.value===fd.options[1]){ if(!valid6(d.value)){d.value=today6();d.dispatchEvent(new Event('input'))} }
     else{ d.value='';d.dispatchEvent(new Event('input')) }
+  }
+  if(fd.sk==='doneStat'){
+    const dr=document.getElementById('dur_'+k);
+    if(dr)dr.style.display=(s.value===fd.options[1])?'flex':'none';
   }
   paintStat(k);
 }
@@ -1158,6 +1191,7 @@ function readFields(){
     else if(fd.type==='amount'||fd.type==='minutes'||fd.type==='seconds'){d[fd.k]=e.value===''?'':Number(e.value)}
     else{d[fd.k]=e.value.trim()}
   });
+  if(c.fields.some(f=>f.type==='statline'&&f.sk==='doneStat')&&d.doneStat==='完了'&&durState)d.durMin=durState;
   return d;
 }
 function saveEntry(){
@@ -1165,6 +1199,10 @@ function saveEntry(){
   if(editingId){
     const prev=entries.find(x=>String(x.id)===String(editingId));
     if(prev&&Array.isArray(prev.data.doneKeys))d.doneKeys=prev.data.doneKeys;
+  }
+  if(c.fields.some(f=>f.type==='statline'&&f.sk==='doneStat')){
+    const prevE=editingId?entries.find(x=>String(x.id)===String(editingId)):null;
+    applyDoneMeta(d,prevE?prevE.data:null);
   }
   const dateF=c.fields.find(f=>f.type==='date6');
   if(dateF&&d[dateF.k]&&!valid6(d[dateF.k])){toast('日付は6桁で入力してください(例:'+today6()+')');return}
@@ -1647,7 +1685,7 @@ function passFilters(e){
   if(impOn&&!p.includes('重要'))return false;
   return true;
 }
-const CAT_ORDER={task:1,kanri:2,jikan:3,shukan:4,shushi:5,anken:6,bukken:7,neta:8,houjin:9,kojin:10,orei:11,pf:12,genkin:13};
+const CAT_ORDER={task:1,kanri:2,jikan:3,shukan:4,pf:5,shushi:6,anken:7,bukken:8,neta:9,houjin:10,kojin:11,orei:12,genkin:13};
 function catOrderRel(e){
   if(e.cat===activeCat)return 0;
   return (CAT_ORDER[e.cat]||50)+1;
