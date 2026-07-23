@@ -129,6 +129,7 @@ textarea.big{min-height:170px}
 .amt-in{color:var(--ok);font-weight:700}
 .amt-out{color:var(--danger);font-weight:700}
 .empty-timeline{color:var(--sub);font-size:.85rem;text-align:center;padding:30px 0}
+.ver{font-size:.62rem;color:var(--sub);font-weight:700;margin-left:6px;letter-spacing:.05em}
 .morebtn{width:100%;border:1px dashed var(--sub);background:none;border-radius:10px;padding:12px;font-size:.85rem;color:var(--sub);cursor:pointer;font-family:inherit;margin-top:4px}
 #kanriBanner{margin:0 0 10px;padding:10px 14px;border-radius:10px;font-size:.85rem;font-weight:700;cursor:pointer;line-height:1.5}
 #kanriBanner.soon{background:#FFF6DC;color:#7A5C00;border:1px solid #E0AA00}
@@ -220,7 +221,7 @@ body.editmode .gtab.active .del{display:inline}
 <body>
 <div class="wrap">
   <header>
-    <div class="logo">QUICKLOG<small id="syncStat">起動中…</small></div>
+    <div class="logo">QUICKLOG<span class="ver" id="appVer"></span><small id="syncStat">起動中…</small></div>
     <button id="editToggle" onclick="toggleEdit()">編集モード</button>
   </header>
 
@@ -348,6 +349,7 @@ const PALETTE=['#3B6FB5','#7B5EA7','#5F7F5F','#9E5E8A','#A84A3B','#4E6E9E','#8A7
 
 /* =============== 同期レイヤー(GAS+スプレッドシート) =============== */
 const GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
+const APP_VER='v30';
 const LS_KEY='ql_key', LS_CACHE='ql_cache_v15', LS_OUTBOX='ql_outbox_v1';
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
@@ -1301,7 +1303,7 @@ const KD_KOKEN=[[60,'資料収集'],[30,'報告書作成']];
 function kanriDeadlines(en,today){
   const d=en.data||{},out=[],done=Array.isArray(d.doneKeys)?d.doneKeys:[];
   const cust=d.partner||'(顧客未設定)';
-  const put=(kind,r,steps)=>{if(!r)return;out.push({id:en.id,cust,kind,date:r.date,key:r.key,over:r.date<today,steps:steps||null})};
+  const put=(kind,r,steps,low)=>{if(!r)return;out.push({id:en.id,cust,kind,date:r.date,key:r.key,over:r.date<today,steps:steps||null,low:!!low})};
   const isP=(d.ktype==='個人');
   let km=0,kd_=0;
   if(isP){km=12;kd_=31}
@@ -1315,9 +1317,9 @@ function kanriDeadlines(en,today){
       if(d.kazei!=='免税')put('消費税の申告期限(3/31)',annualFrom(y=>new Date(y+1,2,31),today,done,'shohizei'),KD_STD);
     }
     if(valid6(d.kyoka||''))put('建設業・決算変更届',annualFrom(y=>addMonthsClamp(y,km,kd_,4),today,done,'kessanhenko'),KD_STD);
-    put('四半期チェック①(決算9ヶ月前)',annualFrom(y=>addMonthsClamp(y,km,kd_,-9),today,done,'q1check'),null);
-    put('四半期チェック②(決算6ヶ月前)',annualFrom(y=>addMonthsClamp(y,km,kd_,-6),today,done,'q2check'),null);
-    put('四半期チェック③(決算3ヶ月前・来期の消費税方式を検討)',annualFrom(y=>addMonthsClamp(y,km,kd_,-3),today,done,'q3check'),null);
+    put('四半期チェック①(決算9ヶ月前)',annualFrom(y=>addMonthsClamp(y,km,kd_,-9),today,done,'q1check'),null,true);
+    put('四半期チェック②(決算6ヶ月前)',annualFrom(y=>addMonthsClamp(y,km,kd_,-6),today,done,'q2check'),null,true);
+    put('四半期チェック③(決算3ヶ月前・来期の消費税方式を検討)',annualFrom(y=>addMonthsClamp(y,km,kd_,-3),today,done,'q3check'),null,true);
     put('本決算(決算日)',annualFrom(y=>addMonthsClamp(y,km,kd_,0),today,done,'honkessan'),null);
   }
   if(valid6(d.kyoka||'')){
@@ -1363,7 +1365,7 @@ function renderKanriDash(){
   const today=kToday();
   box.innerHTML='<div class="kd-title">期限ダッシュボード(全顧客・近い順)</div>'+list.map(x=>{
     const days=kdDays(x.date);
-    const cls=x.over?' kd-over':(days<=30?' kd-soon':'');
+    const cls=x.over?(x.low?' kd-soon':' kd-over'):(days<=30?' kd-soon':'');
     const dtxt=x.over?('超過 '+(-days)+'日'):('あと '+days+'日');
     let exp='';
     if(kdOpen===x.key){
@@ -1398,19 +1400,25 @@ function kdDone(id,key,label){
 function renderBanner(){
   const b=document.getElementById('kanriBanner');if(!b)return;
   const list=allDeadlines();
-  const over=list.filter(x=>x.over).sort((a,b)=>a.date-b.date);
+  const over=list.filter(x=>x.over&&!x.low).sort((a,b)=>a.date-b.date);
+  const lowOver=list.filter(x=>x.over&&x.low);
   const soon=list.filter(x=>!x.over&&kdDays(x.date)<=30).sort((a,b)=>a.date-b.date);
-  if(!over.length&&!soon.length){b.style.display='none';b.className='';return}
+  if(!over.length&&!soon.length&&!lowOver.length){b.style.display='none';b.className='';return}
   b.style.display='block';
+  let main='';
   if(over.length){
     b.className='over';
     const o=over[0];
-    b.textContent='⚠ 期限超過: '+over.length+'件'+(soon.length?('・30日以内: '+soon.length+'件'):'')+'(最優先: '+o.cust+' '+o.kind+' 超過'+(-kdDays(o.date))+'日) — タップで管理タブへ';
-  }else{
+    main='⚠ 期限超過: '+over.length+'件'+(soon.length?('・30日以内: '+soon.length+'件'):'')+'(最優先: '+esc(o.cust)+' '+esc(o.kind)+' 超過'+(-kdDays(o.date))+'日) — タップで管理タブへ';
+  }else if(soon.length){
     b.className='soon';
     const s0=soon[0];
-    b.textContent='⚠ 期限30日以内: '+soon.length+'件(最短: '+s0.cust+' '+s0.kind+' 残り'+kdDays(s0.date)+'日) — タップで管理タブへ';
+    main='⚠ 期限30日以内: '+soon.length+'件(最短: '+esc(s0.cust)+' '+esc(s0.kind)+' 残り'+kdDays(s0.date)+'日) — タップで管理タブへ';
+  }else{
+    b.className='soon';
   }
+  const sub=lowOver.length?('<div style="margin-top:'+(main?'4px':'0')+';font-size:.78rem;font-weight:400">四半期チェックの超過: '+lowOver.length+'件(急ぎではありません。ダッシュボードで消し込みを)</div>'):'';
+  b.innerHTML=main+sub;
   b.onclick=()=>{
     guardLeave(()=>{activeCat='kanri';editingId=null;listLimit=20;renderTabs();renderFields();renderTimeline();window.scrollTo({top:0});});
   };
@@ -1872,6 +1880,7 @@ function escAttr(s){return esc(s).replace(/"/g,'&quot;')}
     }
   });
 })();
+document.getElementById('appVer').textContent=APP_VER;
 loadLocal();
 migrate();
 renderTabs();renderFields();
