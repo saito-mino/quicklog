@@ -242,19 +242,8 @@ body.editmode .gtab.active .del{display:inline}
   <div class="filterrow">
     <button class="fbtn" id="fb_urg" onclick="toggleUrg()">緊急</button>
     <button class="fbtn" id="fb_imp" onclick="toggleImp()">重要</button>
-    <button class="fbtn" id="fb_done" onclick="toggleDone()">完了含む</button>
+    <button class="fbtn" id="fb_done" onclick="toggleDone()">完了を含む</button>
     <button class="fbtn" id="fb_arch" onclick="toggleArch()">アーカイブ</button>
-    <button class="fbtn" id="fb_anken" onclick="openAnkenFilter()">案件</button>
-  </div>
-  <div class="filterrow">
-    <button class="fbtn" id="fc_task" onclick="toggleCat('task')">タスク</button>
-    <button class="fbtn" id="fc_shushi" onclick="toggleCat('shushi')">収支</button>
-    <button class="fbtn" id="fc_jikan" onclick="toggleCat('jikan')">時間</button>
-    <button class="fbtn" id="fc_shukan" onclick="toggleCat('shukan')">習慣</button>
-    <button class="fbtn" id="fc_anken" onclick="toggleCat('anken')">案件</button>
-    <button class="fbtn" id="fc_bukken" onclick="toggleCat('bukken')">物件</button>
-    <button class="fbtn" id="fc_houjin" onclick="toggleCat('houjin')">法人</button>
-    <button class="fbtn" id="fc_kojin" onclick="toggleCat('kojin')">個人</button>
   </div>
   <div class="hint">※ スペース区切りでAND検索(例:「物件 中村」=物件の中の中村様)。「未請求」「未完了」「緊急」などでも絞れます。検索中に「全件コピー」を押すと絞り込んだ結果だけをコピー(AI貼り付け用)</div>
 
@@ -359,7 +348,7 @@ const PALETTE=['#3B6FB5','#7B5EA7','#5F7F5F','#9E5E8A','#A84A3B','#4E6E9E','#8A7
 
 /* =============== 同期レイヤー(GAS+スプレッドシート) =============== */
 const GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
-const LS_KEY='ql_key', LS_CACHE='ql_cache_v14', LS_OUTBOX='ql_outbox_v1';
+const LS_KEY='ql_key', LS_CACHE='ql_cache_v15', LS_OUTBOX='ql_outbox_v1';
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 let apiKey=lsGet(LS_KEY)||'';
@@ -374,7 +363,7 @@ function loadLocal(){
     let c=JSON.parse(lsGet(LS_CACHE)||'null');
     if(!c){
       /* 旧バージョンのキャッシュから記録・人物リストだけ引き継ぐ(タブ構成は新定義を使う) */
-      const old=JSON.parse(lsGet('ql_cache_v13')||lsGet('ql_cache_v12')||lsGet('ql_cache_v11')||lsGet('ql_cache_v10')||lsGet('ql_cache_v9')||lsGet('ql_cache_v8')||lsGet('ql_cache_v7')||lsGet('ql_cache_v6')||lsGet('ql_cache_v5')||lsGet('ql_cache_v4')||lsGet('ql_cache_v3')||lsGet('ql_cache_v1')||'null');
+      const old=JSON.parse(lsGet('ql_cache_v14')||lsGet('ql_cache_v13')||lsGet('ql_cache_v12')||lsGet('ql_cache_v11')||lsGet('ql_cache_v10')||lsGet('ql_cache_v9')||lsGet('ql_cache_v8')||lsGet('ql_cache_v7')||lsGet('ql_cache_v6')||lsGet('ql_cache_v5')||lsGet('ql_cache_v4')||lsGet('ql_cache_v3')||lsGet('ql_cache_v1')||'null');
       if(old)c={entries:old.entries,groups:old.groups,recentPeople:old.recentPeople};
     }
     if(c){
@@ -434,7 +423,7 @@ async function flush(){
   }
   flushing=false;updStat();
 }
-const OTHER_LABEL={engage:'区分',source:'経路',scope:'守備範囲',delegate:'依頼先',kyodo:'共同',introducers:'紹介者',start:'開始',end:'終了',ktype:'区分',kessan:'決算月日',kazei:'消費税',kyoka:'許可満了',koken:'後見',bday:'誕生日',dl:'手動期限',budget:'金額',area:'エリア',zoning:'用途地域',size:'広さ・坪数',youto:'用途',idea:'対策',free:'自由記述',deal:'売買',prio:'区分',anken:'案件',est:'設立日',fiscal:'決算期',capital:'資本金',shares:'株式数',permits:'許認可',aoiro:'申告',kazei:'消費税',honsoku:'課税方式',sales1:'売上2期前',sales2:'売上前期',sales3:'売上当期予想',bd1:'誕生日①',bd2:'誕生日②',bd3:'誕生日③',ng1:'年賀状①',ng2:'年賀状②',ng3:'年賀状③',sm1:'暑中①',sm2:'暑中②',sm3:'暑中③'};
+const OTHER_LABEL={engage:'区分',source:'経路',souzoku:'相続・家族',scope:'守備範囲',delegate:'依頼先',kyodo:'共同',introducers:'紹介者',start:'開始',end:'終了',ktype:'区分',kessan:'決算月日',kazei:'消費税',kyoka:'許可満了',koken:'後見',bday:'誕生日',dl:'手動期限',budget:'金額',area:'エリア',zoning:'用途地域',size:'広さ・坪数',youto:'用途',idea:'対策',free:'自由記述',deal:'売買',prio:'区分',anken:'案件',est:'設立日',fiscal:'決算期',capital:'資本金',shares:'株式数',permits:'許認可',aoiro:'申告',kazei:'消費税',honsoku:'課税方式',sales1:'売上2期前',sales2:'売上前期',sales3:'売上当期予想',bd1:'誕生日①',bd2:'誕生日②',bd3:'誕生日③',ng1:'年賀状①',ng2:'年賀状②',ng3:'年賀状③',sm1:'暑中①',sm2:'暑中②',sm3:'暑中③'};
 function oLabel(f){return OTHER_LABEL[f.k]||String(f.label||f.k).replace(/[(（].*$/,'').trim()}
 function colsOf(e){
   const fs=catFields(e.cat),d=e.data;
@@ -508,7 +497,7 @@ let cfgTimer=null;
 function cfgSync(){
   clearTimeout(cfgTimer);
   cfgTimer=setTimeout(()=>{
-    enqueue({action:'config',name:'cats13',value:cats});
+    enqueue({action:'config',name:'cats14',value:cats});
     enqueue({action:'config',name:'groups',value:groups});
     enqueue({action:'config',name:'recent',value:recentPeople});
   },1200);
@@ -534,7 +523,7 @@ async function fetchAll(){
     sv.sort((a,b)=>(b.ts||0)-(a.ts||0));
     entries=sv;
     if(j.config){
-      if(Array.isArray(j.config.cats13)&&j.config.cats13.length)cats=j.config.cats13;
+      if(Array.isArray(j.config.cats14)&&j.config.cats14.length)cats=j.config.cats14;
       if(Array.isArray(j.config.groups)&&j.config.groups.length)groups=j.config.groups;
       if(Array.isArray(j.config.recent))recentPeople=j.config.recent;
     }
@@ -548,7 +537,7 @@ async function fetchAll(){
     if(!groups.find(g=>g.id===activeGroup))activeGroup=groups[0].id;
     saveLocal();
     renderTabs();
-    if(!formDirty())renderFields();
+    if(!formBusy())renderFields();
     renderTimeline();
     updStat();flush();
   }catch(e){updStat('オフライン(前回データを表示中)')}
@@ -595,9 +584,19 @@ let cats=[
    {k:'ktype',label:'区分',type:'select',options:['法人','個人'],def:'法人'},
    {k:'kessan',label:'決算月日(4桁・例0331)',type:'md4',showIf:{k:'ktype',v:'法人'}},
    {k:'kazei',label:'消費税',type:'select',options:['課税','免税'],def:'課税'},
+   {k:'sales1',label:'売上:2期前(円)',type:'amount',row:'s',showIf:{k:'ktype',v:'法人'}},
+   {k:'sales2',label:'売上:前期(円)',type:'amount',row:'s',showIf:{k:'ktype',v:'法人'}},
+   {k:'sales3',label:'売上:当期予想(円)',type:'amount',row:'s',showIf:{k:'ktype',v:'法人'}},
+   {k:'capital',label:'資本金(円)',type:'amount',row:'c',showIf:{k:'ktype',v:'法人'}},
+   {k:'shares',label:'株式数',type:'text',ph:'例:100株',row:'c',showIf:{k:'ktype',v:'法人'}},
+   {k:'est',label:'設立日',type:'text',ph:'例:1998-04-01',row:'e',showIf:{k:'ktype',v:'法人'}},
+   {k:'permits',label:'許認可',type:'text',ph:'例:建設業(般-6)第○号',row:'e',showIf:{k:'ktype',v:'法人'}},
+   {k:'aoiro',label:'申告',type:'select',options:['青色','白色'],row:'t',showIf:{k:'ktype',v:'法人'}},
+   {k:'honsoku',label:'課税方式',type:'select',options:['本則課税','簡易課税'],row:'t',showIf:{k:'ktype',v:'法人'}},
    {k:'kyoka',label:'建設業許可 満了日(6桁・任意)',type:'date6o'},
-   {k:'koken',label:'後見契約',type:'select',options:['なし','あり'],def:'なし'},
+   {k:'koken',label:'後見契約',type:'select',options:['なし','あり'],def:'なし',showIf:{k:'ktype',v:'個人'}},
    {k:'bday',label:'誕生日(4桁 月日・例0715)',type:'md4',showIf:{k:'koken',v:'あり'}},
+   {k:'souzoku',label:'相続・家族の状況',type:'textarea',ph:'家族構成・相続の懸念・後見の経緯など(任意)',showIf:{k:'ktype',v:'個人'}},
    {k:'dl',label:'手動期限(＋で追加)',type:'deadlist'},
    {k:'note',label:'備考',type:'textarea',ph:'メモ(任意)'}]},
  {id:'jikan',name:'時間',color:'#5C4326',text:'#fff',fields:[
@@ -677,13 +676,13 @@ let cats=[
    {k:'sm2',label:'②',type:'date6o',row:'m'},
    {k:'sm3',label:'③',type:'date6o',row:'m'},
    {k:'note',label:'備考',type:'textarea',ph:'好み・メモ(任意)'}]},
- {id:'orei',name:'お礼',color:'#DFEDE6',text:'#232A35',fields:[
+ {id:'orei',name:'ご恩',color:'#DFEDE6',text:'#232A35',fields:[
    {k:'date',label:'いつ',type:'date6'},
    {k:'partner',label:'誰に(してもらった相手)',type:'person'},
    {k:'content',label:'何をしてもらったか',type:'textarea',ph:'してもらったこと・お礼の状況など',main:1}]},
- {id:'pf',name:'PF',color:'#E9E2F3',text:'#232A35',fields:[
-   {k:'partner',label:'誰のプロフィールか',type:'person'},
-   {k:'content',label:'プロフィール・特記事項',type:'bigtext',ph:'顧客の人物像・家族・好み・経緯などを自由に',main:1}]},
+ {id:'pf',name:'EP',color:'#E9E2F3',text:'#232A35',fields:[
+   {k:'partner',label:'誰のエピソードか',type:'person'},
+   {k:'content',label:'エピソード・人物メモ',type:'bigtext',ph:'顧客の人物像・家族・好み・印象的な出来事などを自由に',main:1}]},
  {id:'genkin',name:'残高',color:'#F1E5C2',text:'#232A35',fields:[
    {k:'date',label:'いつ時点',type:'date6'},
    {k:'amount',label:'現金残高(円)',type:'amount',main:1},
@@ -799,15 +798,21 @@ function formDirty(){
     if(editingId)return true;
     const c=catOf(activeCat);
     const d=readFields();
-  if(editingId){
-    const prev=entries.find(x=>String(x.id)===String(editingId));
-    if(prev&&Array.isArray(prev.data.doneKeys))d.doneKeys=prev.data.doneKeys;
-  }
     if(hasBodyOf(c,d))return true;
     const fl=c.fields.find(f=>f.type==='flags');
     if(fl&&(selState[fl.k]||[]).length)return true;
-  }catch(e){}
+  }catch(e){return true} /* 判定できない時は安全側=入力中とみなす */
   return false;
+}
+let lastTouch=0;
+function formBusy(){
+  if(Date.now()-lastTouch<10000)return true; /* 直近10秒以内に触れていたら絶対に触らない */
+  try{
+    const ec=document.getElementById('entrycard');
+    const ae=document.activeElement;
+    if(ec&&ae&&ec.contains(ae))return true; /* カーソルがフォーム内にある間も禁止 */
+  }catch(e){return true}
+  return formDirty();
 }
 function needGuard(){
   try{
@@ -1155,6 +1160,10 @@ function readFields(){
 }
 function saveEntry(){
   const c=catOf(activeCat);const d=readFields();
+  if(editingId){
+    const prev=entries.find(x=>String(x.id)===String(editingId));
+    if(prev&&Array.isArray(prev.data.doneKeys))d.doneKeys=prev.data.doneKeys;
+  }
   const dateF=c.fields.find(f=>f.type==='date6');
   if(dateF&&d[dateF.k]&&!valid6(d[dateF.k])){toast('日付は6桁で入力してください(例:'+today6()+')');return}
   for(const fd of c.fields.filter(f=>f.type==='statline'&&f.dk)){
@@ -1306,7 +1315,10 @@ function kanriDeadlines(en,today){
       if(d.kazei!=='免税')put('消費税の申告期限(3/31)',annualFrom(y=>new Date(y+1,2,31),today,done,'shohizei'),KD_STD);
     }
     if(valid6(d.kyoka||''))put('建設業・決算変更届',annualFrom(y=>addMonthsClamp(y,km,kd_,4),today,done,'kessanhenko'),KD_STD);
-    put('来期の消費税方式チェック(決算3ヶ月前)',annualFrom(y=>addMonthsClamp(y,km,kd_,-3),today,done,'zeicheck'),null);
+    put('四半期チェック①(決算9ヶ月前)',annualFrom(y=>addMonthsClamp(y,km,kd_,-9),today,done,'q1check'),null);
+    put('四半期チェック②(決算6ヶ月前)',annualFrom(y=>addMonthsClamp(y,km,kd_,-6),today,done,'q2check'),null);
+    put('四半期チェック③(決算3ヶ月前・来期の消費税方式を検討)',annualFrom(y=>addMonthsClamp(y,km,kd_,-3),today,done,'q3check'),null);
+    put('本決算(決算日)',annualFrom(y=>addMonthsClamp(y,km,kd_,0),today,done,'honkessan'),null);
   }
   if(valid6(d.kyoka||'')){
     const man=new Date(+('20'+d.kyoka.slice(0,2)),+d.kyoka.slice(2,4)-1,+d.kyoka.slice(4,6));
@@ -1605,11 +1617,7 @@ function paintFilters(){
   set('fb_urg',urgOn);
   set('fb_imp',impOn);
   set('fb_done',showDone);
-  set('fb_anken',!!ankenFilter);
   set('fb_arch',archOn);
-  ['task','shushi','jikan','shukan','anken','bukken','houjin','kojin'].forEach(id=>set('fc_'+id,catFilter===id));
-  const fa=document.getElementById('fb_anken');
-  if(fa)fa.textContent=ankenFilter?('案件: '+ankenFilter.slice(0,8)+(ankenFilter.length>8?'…':'')):'案件';
 }
 function passFilters(e){
   const d=e.data||{};
@@ -1633,9 +1641,8 @@ function passFilters(e){
 }
 const CAT_ORDER={task:1,kanri:2,jikan:3,shukan:4,shushi:5,anken:6,bukken:7,neta:8,houjin:9,kojin:10,orei:11,pf:12,genkin:13};
 function catOrderRel(e){
-  const base=CAT_ORDER[activeCat]||50;
-  const v=CAT_ORDER[e.cat]||50;
-  return v>=base?v-base:v-base+100;
+  if(e.cat===activeCat)return 0;
+  return (CAT_ORDER[e.cat]||50)+1;
 }
 function doneRank(e){return (e.data&&e.data.doneStat==='完了')?1:0}
 function sortForList(list){return list.sort((a,b)=>catOrderRel(a)-catOrderRel(b)||doneRank(a)-doneRank(b)||((b.ts||0)-(a.ts||0)))}
@@ -1646,12 +1653,9 @@ function matches(e,q){
 
 function summaryHTML(e){
   const fs=catFields(e.cat);const d=e.data;
-  let badges=fs.filter(f=>f.type==='select'&&d[f.k]&&d[f.k]!=='未設定'&&f.k!=='io').map(f=>{
-    const val=d[f.k];const lab=(f.labels&&f.labels[val])||val;
-    return `<span class="badge">${esc(lab)}</span>`;
-  }).join('');
+  let badges='';
   fs.filter(f=>f.type==='flags'&&Array.isArray(d[f.k])&&d[f.k].length).forEach(f=>{
-    d[f.k].forEach(fv=>{
+    sortFlags(d[f.k].slice()).forEach(fv=>{
       if(fv==='なし')return;
       const cls=fv==='緊急'?' pa':fv==='重要'?' pb':'';
       badges+=`<span class="badge${cls}">${esc(fv)}</span>`;
@@ -1661,6 +1665,10 @@ function summaryHTML(e){
     const sv=d[fd.sk]||fd.options[0];
     badges+=`<span class="badge ${sv===fd.options[1]?'bgreen':'bred'}">${esc(sv)}</span>`;
   });
+  badges+=fs.filter(f=>f.type==='select'&&d[f.k]&&d[f.k]!=='未設定'&&f.k!=='io').map(f=>{
+    const val=d[f.k];const lab=(f.labels&&f.labels[val])||val;
+    return `<span class="badge">${esc(lab)}</span>`;
+  }).join('');
   if(d.anken)badges+=`<span class="badge">${esc(String(d.anken).slice(0,14))}</span>`;
   if(d.bukkenref)badges+=`<span class="badge">${esc(String(d.bukkenref).slice(0,14))}</span>`;
   if(e.arch)badges+=`<span class="badge">アーカイブ</span>`;
@@ -1846,6 +1854,14 @@ function esc(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').
 function escAttr(s){return esc(s).replace(/"/g,'&quot;')}
 
 (function(){
+  const ec=document.getElementById('entrycard');
+  if(ec){
+    ['input','click','focusin','keydown','touchstart'].forEach(ev=>{
+      ec.addEventListener(ev,()=>{lastTouch=Date.now()},true);
+    });
+  }
+})();
+(function(){
   const sb=document.getElementById('searchBox');
   let bypass=false;
   sb.addEventListener('focus',()=>{
@@ -1858,7 +1874,8 @@ function escAttr(s){return esc(s).replace(/"/g,'&quot;')}
 })();
 loadLocal();
 migrate();
-renderTabs();renderFields();renderTimeline();
+renderTabs();renderFields();
+setTimeout(renderTimeline,0);
 updStat();
 if(!apiKey){showKeyScreen('初回設定です');updStat('未接続');}
 else{fetchAll();}
