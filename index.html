@@ -100,6 +100,7 @@ textarea.big{min-height:170px}
 .statline label{display:block;font-size:.7rem;color:var(--sub);letter-spacing:.08em;margin-bottom:3px}
 .statline select{padding:8px 10px;font-size:.92rem;font-weight:700;border-radius:8px;cursor:pointer;color:#fff;min-width:0}
 .statline select.neg{background:var(--danger);border-color:var(--danger)}
+.statline select.hold{background:#8A93A6;border-color:#8A93A6}
 .statline select.pos{background:var(--ok);border-color:var(--ok)}
 .statline select option{background:#fff;color:var(--ink);font-weight:400}
 .savebtn{width:100%;border:none;border-radius:8px;padding:13px;font-size:1rem;font-weight:700;color:#fff;cursor:pointer;letter-spacing:.2em;margin-top:2px;font-family:inherit}
@@ -123,6 +124,8 @@ textarea.big{min-height:170px}
 .badge{font-size:.68rem;border:1px solid var(--line);border-radius:10px;padding:0 8px;color:var(--sub);background:#F6F7F5}
 .badge.bred{color:#fff;border-color:var(--danger);background:var(--danger);font-weight:700}
 .badge.bgreen{color:#fff;border-color:var(--ok);background:var(--ok);font-weight:700}
+.badge.bgray{color:#fff;border-color:#8A93A6;background:#8A93A6;font-weight:700}
+.bpill.gray{background:#8A93A6}
 .badge.pa{color:#232A35;border-color:#E0AA00;background:#F2CE55;font-weight:700}
 .badge.pb{color:#fff;border-color:#7B5EA7;background:#7B5EA7;font-weight:700}
 .rec .txt{font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
@@ -248,7 +251,9 @@ body.editmode .gtab.active .del{display:inline}
     <button class="fbtn" id="fb_urg" onclick="toggleUrg()">緊急</button>
     <button class="fbtn" id="fb_imp" onclick="toggleImp()">重要</button>
     <button class="fbtn" id="fb_done" onclick="toggleDone()">完了を含む</button>
+    <button class="fbtn" id="fb_hold" onclick="toggleHold()">保留</button>
     <button class="fbtn" id="fb_arch" onclick="toggleArch()">アーカイブ</button>
+    <button class="fbtn" id="fb_anken" onclick="openAnkenFilter()">案件</button>
   </div>
   <div class="hint">※ スペース区切りでAND検索(例:「物件 中村」=物件の中の中村様)。「未請求」「未完了」「緊急」などでも絞れます。検索中に「全件コピー」を押すと絞り込んだ結果だけをコピー(AI貼り付け用)</div>
 
@@ -353,8 +358,8 @@ const PALETTE=['#3B6FB5','#7B5EA7','#5F7F5F','#9E5E8A','#A84A3B','#4E6E9E','#8A7
 
 /* =============== 同期レイヤー(GAS+スプレッドシート) =============== */
 const GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
-const APP_VER='v31';
-const LS_KEY='ql_key', LS_CACHE='ql_cache_v16', LS_OUTBOX='ql_outbox_v1';
+const APP_VER='v35';
+const LS_KEY='ql_key', LS_CACHE='ql_cache_v19', LS_OUTBOX='ql_outbox_v1';
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 let apiKey=lsGet(LS_KEY)||'';
@@ -369,7 +374,7 @@ function loadLocal(){
     let c=JSON.parse(lsGet(LS_CACHE)||'null');
     if(!c){
       /* 旧バージョンのキャッシュから記録・人物リストだけ引き継ぐ(タブ構成は新定義を使う) */
-      const old=JSON.parse(lsGet('ql_cache_v15')||lsGet('ql_cache_v14')||lsGet('ql_cache_v13')||lsGet('ql_cache_v12')||lsGet('ql_cache_v11')||lsGet('ql_cache_v10')||lsGet('ql_cache_v9')||lsGet('ql_cache_v8')||lsGet('ql_cache_v7')||lsGet('ql_cache_v6')||lsGet('ql_cache_v5')||lsGet('ql_cache_v4')||lsGet('ql_cache_v3')||lsGet('ql_cache_v1')||'null');
+      const old=JSON.parse(lsGet('ql_cache_v18')||lsGet('ql_cache_v17')||lsGet('ql_cache_v16')||lsGet('ql_cache_v15')||lsGet('ql_cache_v14')||lsGet('ql_cache_v13')||lsGet('ql_cache_v12')||lsGet('ql_cache_v11')||lsGet('ql_cache_v10')||lsGet('ql_cache_v9')||lsGet('ql_cache_v8')||lsGet('ql_cache_v7')||lsGet('ql_cache_v6')||lsGet('ql_cache_v5')||lsGet('ql_cache_v4')||lsGet('ql_cache_v3')||lsGet('ql_cache_v1')||'null');
       if(old)c={entries:old.entries,groups:old.groups,recentPeople:old.recentPeople};
     }
     if(c){
@@ -382,6 +387,11 @@ function loadLocal(){
 }
 /* ---- 一括改修v3の自動移行 ---- */
 function migrate(){
+  /* 誤って作られた「5」という名前のタブを自動削除 */
+  if(cats.some(c=>c.name==='5')){
+    cats=cats.filter(c=>c.name!=='5');
+    cfgSync();
+  }
   const ren={'行政書士':'行政','宅建業':'宅建','他士業':'士業','法人顧客':'業者','個人顧客':'一般','法人':'業者','個人':'一般'};
   let g=false;
   groups.forEach(x=>{if(ren[x.name]){x.name=ren[x.name];g=true}});
@@ -410,7 +420,10 @@ function migrate(){
 }
 function updStat(msg){
   const el=document.getElementById('syncStat');if(!el)return;
-  el.textContent=msg||(outbox.length?('送信待ち '+outbox.length+'件'):'同期済み');
+  const t=msg||(outbox.length?('送信待ち '+outbox.length+'件'):'同期済み');
+  el.textContent=t;
+  const warn=/オフライン|送信待ち|未接続|違います/.test(t);
+  el.style.color=warn?'#E05656':'#3FCF8E';
 }
 let flushing=false;
 function enqueue(op,defer){outbox.push(op);saveLocal();updStat();if(!defer)flush()}
@@ -429,7 +442,7 @@ async function flush(){
   }
   flushing=false;updStat();
 }
-const OTHER_LABEL={engage:'区分',source:'経路',souzoku:'相続・家族',scope:'守備範囲',delegate:'依頼先',kyodo:'共同',introducers:'紹介者',start:'開始',end:'終了',ktype:'区分',kessan:'決算月日',kazei:'消費税',kyoka:'許可満了',koken:'後見',bday:'誕生日',dl:'手動期限',budget:'金額',area:'エリア',zoning:'用途地域',size:'広さ・坪数',youto:'用途',idea:'対策',free:'自由記述',deal:'売買',prio:'区分',anken:'案件',est:'設立日',fiscal:'決算期',capital:'資本金',shares:'株式数',permits:'許認可',aoiro:'申告',kazei:'消費税',honsoku:'課税方式',sales1:'売上2期前',sales2:'売上前期',sales3:'売上当期予想',bd1:'誕生日①',bd2:'誕生日②',bd3:'誕生日③',ng1:'年賀状①',ng2:'年賀状②',ng3:'年賀状③',sm1:'暑中①',sm2:'暑中②',sm3:'暑中③'};
+const OTHER_LABEL={engage:'区分',source:'経路',souzoku:'相続・家族',genen:'減塩',floors:'階段',tsumiWhat:'積立対象',tsumiAmt:'積立額',pieces:'片付け',scope:'守備範囲',delegate:'依頼先',kyodo:'共同',introducers:'紹介者',start:'開始',end:'終了',ktype:'区分',kessan:'決算月日',kazei:'消費税',kyoka:'許可満了',koken:'後見',bday:'誕生日',dl:'手動期限',budget:'金額',area:'エリア',zoning:'用途地域',size:'広さ・坪数',youto:'用途',idea:'対策',free:'自由記述',deal:'売買',prio:'区分',anken:'案件',est:'設立日',fiscal:'決算期',capital:'資本金',shares:'株式数',permits:'許認可',aoiro:'申告',kazei:'消費税',honsoku:'課税方式',sales1:'売上2期前',sales2:'売上前期',sales3:'売上当期予想',bd1:'誕生日①',bd2:'誕生日②',bd3:'誕生日③',ng1:'年賀状①',ng2:'年賀状②',ng3:'年賀状③',sm1:'暑中①',sm2:'暑中②',sm3:'暑中③'};
 function oLabel(f){return OTHER_LABEL[f.k]||String(f.label||f.k).replace(/[(（].*$/,'').trim()}
 function colsOf(e){
   const fs=catFields(e.cat),d=e.data;
@@ -484,6 +497,9 @@ function colsOf(e){
       case 'md4':
         if(valid_md4(v||''))others.push(oLabel(f)+': '+v.slice(0,2)+'/'+v.slice(2,4));
         break;
+      case 'unitnum':
+        if(v!==''&&v!==undefined&&v!==null)others.push(oLabel(f)+': '+v+(f.unit||''));
+        break;
       case 'deadlist':
         if(Array.isArray(v)&&v.length)others.push('手動期限: '+v.map(x=>x.n+'('+(iso6(x.d)||x.d)+(x.r?'・毎年':'')+')').join('、'));
         break;
@@ -506,7 +522,7 @@ let cfgTimer=null;
 function cfgSync(){
   clearTimeout(cfgTimer);
   cfgTimer=setTimeout(()=>{
-    enqueue({action:'config',name:'cats15',value:cats});
+    enqueue({action:'config',name:'cats18',value:cats});
     enqueue({action:'config',name:'groups',value:groups});
     enqueue({action:'config',name:'recent',value:recentPeople});
   },1200);
@@ -532,7 +548,7 @@ async function fetchAll(){
     sv.sort((a,b)=>(b.ts||0)-(a.ts||0));
     entries=sv;
     if(j.config){
-      if(Array.isArray(j.config.cats15)&&j.config.cats15.length)cats=j.config.cats15;
+      if(Array.isArray(j.config.cats18)&&j.config.cats18.length)cats=j.config.cats18;
       if(Array.isArray(j.config.groups)&&j.config.groups.length)groups=j.config.groups;
       if(Array.isArray(j.config.recent))recentPeople=j.config.recent;
     }
@@ -582,7 +598,7 @@ document.addEventListener('keydown',function(e){
 let cats=[
  {id:'task',name:'タスク',color:'#2C4A73',text:'#fff',fields:[
    {k:'date',label:'発生日',type:'date6',row:'h1'},
-   {k:'done',label:'完了',type:'statline',sk:'doneStat',options:['未完了','完了'],dk:'doneDate',dlabel:'完了日',autoDate:true,row:'h1'},
+   {k:'done',label:'完了',type:'statline',sk:'doneStat',options:['未完了','保留','完了'],okv:'完了',dk:'doneDate',dlabel:'完了日',autoDate:true,row:'h1'},
    {k:'partner',label:'相手方',type:'person'},
    {k:'anken',label:'案件に紐づけ(任意)',type:'ankenlink'},
    {k:'bukkenref',label:'物件に紐づけ(任意)',type:'bukkenlink'},
@@ -618,13 +634,20 @@ let cats=[
    {k:'minutes',label:'所要時間(自動計算・直接入力も可)',type:'minutes'}]},
  {id:'shukan',name:'習慣',color:'#4A3A6B',text:'#fff',fields:[
    {k:'date',label:'日付',type:'date6'},
-   {k:'kind',label:'種類',type:'select',extendable:true,options:['DASH','節約','筋トレ','ストレッチ']},
+   {k:'kind',label:'種類',type:'select',extendable:true,options:['DASH','節約','筋トレ','ストレッチ','減塩','階段','積み立て','片付け']},
    {k:'seconds',label:'秒数',type:'seconds',showIf:{k:'kind',vs:['DASH','筋トレ','ストレッチ']}},
    {k:'amount',label:'節約額(円)',type:'amount',showIf:{k:'kind',v:'節約'}},
+   {k:'genen',label:'塩を振る回数を減らした',type:'unitnum',unit:'回',showIf:{k:'kind',v:'減塩'}},
+   {k:'floors',label:'何階まで登ったか',type:'unitnum',unit:'階',showIf:{k:'kind',v:'階段'}},
+   {k:'tsumiWhat',label:'何を積み立てたか(目標:インデックスファンド 月3万)',type:'text',ph:'例:インデックスファンド',showIf:{k:'kind',v:'積み立て'}},
+   {k:'tsumiAmt',label:'積立額(円)',type:'amount',showIf:{k:'kind',v:'積み立て'}},
+   {k:'pieces',label:'片付けた個数',type:'unitnum',unit:'個',showIf:{k:'kind',v:'片付け'}},
    {k:'content',label:'内容',type:'textarea',ph:'メモ(任意)',main:1}]},
- {id:'pf',name:'日記',color:'#3F4A54',text:'#fff',fields:[
-   {k:'partner',label:'誰について(任意)',type:'person'},
-   {k:'content',label:'日記・メモ',type:'bigtext',ph:'日々の出来事・気づき・人物メモを自由に',main:1}]},
+ {id:'pf',name:'メモ',color:'#3F4A54',text:'#fff',fields:[
+   {k:'partner',label:'相手方に紐づけ(任意)',type:'person'},
+   {k:'anken',label:'案件に紐づけ(任意)',type:'ankenlink'},
+   {k:'bukkenref',label:'物件に紐づけ(任意)',type:'bukkenlink'},
+   {k:'content',label:'内容',type:'bigtext',ph:'メモ・気づきを自由に',main:1}]},
  {id:'shushi',name:'収支',color:'#1F5C40',text:'#fff',fields:[
    {k:'date',label:'日付',type:'date6'},
    {k:'io',label:'収入 / 支出',type:'select',options:['収入','支出'],def:'支出',cls:{'収入':'io-in','支出':'io-out'}},
@@ -649,19 +672,26 @@ let cats=[
  {id:'bukken',name:'物件',color:'#CFE2F3',text:'#232A35',fields:[
    {k:'done',label:'完了',type:'statline',sk:'doneStat',options:['未完了','完了'],dk:'doneDate',dlabel:'完了日',autoDate:true,row:'h1'},
    {k:'date',label:'依頼日',type:'date6',row:'h1'},
-   {k:'deal',label:'売り / 買い',type:'select',options:['売り','買い'],def:'買い'},
-   {k:'partner',label:'依頼者(売主・買主・借主)',type:'person'},
-   {k:'anken',label:'案件に紐づけ(任意)',type:'ankenlink'},
-   {k:'budget',label:'金額',type:'text',ph:'例:3000万円まで / 家賃15万円まで'},
-   {k:'area',label:'エリア',type:'text',ph:'例:福岡市東区・新宮町'},
-   {k:'zoning',label:'用途地域',type:'text',ph:'例:一低住は避けたい、準工OK'},
-   {k:'size',label:'広さ・坪数',type:'text',ph:'例:土地50坪以上'},
-   {k:'youto',label:'用途',type:'text',ph:''},
+   {k:'deal',label:'売り / 買い',type:'select',options:['売り','買い'],def:'買い',row:'b0'},
+   {k:'youto',label:'用途',type:'text',ph:'',row:'b0'},
+   {k:'partner',label:'依頼者(売主・買主・借主)',type:'person',row:'b1'},
+   {k:'anken',label:'案件に紐づけ(任意)',type:'ankenlink',row:'b1'},
+   {k:'budget',label:'金額',type:'text',ph:'例:3000万円まで',row:'b2'},
+   {k:'area',label:'エリア',type:'text',ph:'例:福岡市東区',row:'b2'},
+   {k:'zoning',label:'用途地域',type:'text',ph:'例:準工OK',row:'b3'},
+   {k:'size',label:'広さ・坪数',type:'text',ph:'例:50坪以上',row:'b3'},
    {k:'kind',label:'種別',type:'select',options:['未設定','戸建','土地','区分','収益','テナント','ビル','ホテル','その他'],def:'未設定'},
    {k:'free',label:'自由記述',type:'bigtext',ph:'統一感なくパパッと書く欄',main:1}]},
  {id:'neta',name:'ネタ',color:'#F9E4CF',text:'#232A35',fields:[
    {k:'date',label:'日付',type:'date6'},
+   {k:'partner',label:'相手方に紐づけ(任意)',type:'person'},
+   {k:'anken',label:'案件に紐づけ(任意)',type:'ankenlink'},
+   {k:'bukkenref',label:'物件に紐づけ(任意)',type:'bukkenlink'},
    {k:'content',label:'内容',type:'bigtext',ph:'記事のネタ・アイデアを直接書く',main:1}]},
+ {id:'recipe',name:'レシピ',color:'#E7F0D8',text:'#232A35',fields:[
+   {k:'date',label:'発生日',type:'date6'},
+   {k:'partner',label:'相手方(任意)',type:'person'},
+   {k:'content',label:'内容',type:'bigtext',ph:'レシピ・手順・やり方を書く',main:1}]},
  {id:'houjin',name:'法人',color:'#D6EBDC',text:'#232A35',fields:[
    {k:'partner',label:'顧客名(法人)',type:'person'},
    {k:'sales1',label:'売上:2期前(円)',type:'amount',row:'s'},
@@ -928,7 +958,7 @@ function renderFields(vals={}){
   c.fields.filter(x=>x.type==='personlist').forEach(x=>renderPL(x.k));
   applyShowIf();applyBigIf();
   const main=c.fields.find(x=>x.main);
-  if(main&&!editingId){const e=document.getElementById('f_'+main.k);if(e&&e.focus)setTimeout(()=>e.focus(),50)}
+  if(main&&!editingId){const e=document.getElementById('f_'+main.k);if(e&&e.focus)setTimeout(()=>{try{e.focus({preventScroll:true})}catch(_){ }window.scrollTo({top:0})},50)}
 }
 function selButtonsHTML(fd){
   let h=fd.options.map(o=>`<button data-v="${escAttr(o)}" onclick="setSel('${fd.k}','${escAttr(o)}')">${esc((fd.labels&&fd.labels[o])||o)}</button>`).join('');
@@ -949,6 +979,7 @@ function fieldHTML(fd,vals){
     case 'date6o':return wrap(`<input type="text" class="date6 num" id="f_${fd.k}" inputmode="numeric" maxlength="6" placeholder="未入力" value="${escAttr(v||'')}">`);
     case 'time4':return wrap(`<input type="text" class="date6 num" id="f_${fd.k}" inputmode="numeric" maxlength="4" placeholder="例:1400" value="${escAttr(v||'')}">`);
     case 'md4':return wrap(`<input type="text" class="date6 num" id="f_${fd.k}" inputmode="numeric" maxlength="4" placeholder="例:0331" value="${escAttr(v||'')}">`);
+    case 'unitnum':return wrap(`<span style="display:flex;align-items:center;gap:6px"><input type="text" class="date6 num" id="f_${fd.k}" inputmode="numeric" maxlength="5" value="${escAttr(v||'')}"><span style="font-size:.85rem;color:var(--sub)">${esc(fd.unit||'')}</span></span>`);
     case 'deadlist':return wrap(`<div id="f_${fd.k}"></div><button type="button" class="dladd" onclick="dlAdd('${fd.k}')">＋ 期限を追加</button>`);
     case 'personlist':return wrap(`<div class="plchips" id="f_${fd.k}"></div>`);
     case 'text':return wrap(`<input type="text" id="f_${fd.k}" placeholder="${escAttr(fd.ph||'')}" value="${escAttr(v||'')}">`);
@@ -967,12 +998,11 @@ function fieldHTML(fd,vals){
       const dpart=fd.dk?`
         <div class="sl"><label>${fd.dlabel}</label>
           <input type="text" class="date6 num" id="f_${fd.k}_d" inputmode="numeric" maxlength="6" placeholder="未入力" value="${escAttr(vals[fd.dk]||'')}"></div>`:'';
-      const durpart=(fd.sk==='doneStat')?`<div class="durrow" id="dur_${fd.k}" style="display:${sv===fd.options[1]?'flex':'none'}"><span class="durlbl">所要(任意):</span>${[[15,'15分'],[30,'30分'],[60,'1時間'],[120,'2時間'],[240,'半日'],[480,'1日']].map(x=>`<button type="button" data-m="${x[0]}" onclick="setDur(${x[0]})">${x[1]}</button>`).join('')}</div>`:'';
+      const durpart=(fd.sk==='doneStat')?`<div class="durrow" id="dur_${fd.k}" style="display:${sv===(fd.okv||fd.options[1])?'flex':'none'}"><span class="durlbl">所要(任意):</span>${[[15,'15分'],[30,'30分'],[60,'1時間'],[120,'2時間'],[240,'半日'],[480,'1日']].map(x=>`<button type="button" data-m="${x[0]}" onclick="setDur(${x[0]})">${x[1]}</button>`).join('')}</div>`:'';
       return `<div class="field" id="w_${fd.k}"><div class="statline">
         <div class="sl"><label>${fd.label}</label>
           <select id="f_${fd.k}_s" onchange="statChange('${fd.k}')">
-            <option${sv===fd.options[0]?' selected':''}>${esc(fd.options[0])}</option>
-            <option${sv===fd.options[1]?' selected':''}>${esc(fd.options[1])}</option>
+            ${fd.options.map(o=>`<option${sv===o?' selected':''}>${esc(o)}</option>`).join('')}
           </select></div>${dpart}
       </div>${durpart}</div>`;
     }
@@ -1011,19 +1041,19 @@ function statChange(k){
   const s=document.getElementById('f_'+k+'_s');
   if(fd.autoDate){
     const d=document.getElementById('f_'+k+'_d');
-    if(s.value===fd.options[1]){ if(!valid6(d.value)){d.value=today6();d.dispatchEvent(new Event('input'))} }
+    if(s.value===(fd.okv||fd.options[1])){ if(!valid6(d.value)){d.value=today6();d.dispatchEvent(new Event('input'))} }
     else{ d.value='';d.dispatchEvent(new Event('input')) }
   }
   if(fd.sk==='doneStat'){
     const dr=document.getElementById('dur_'+k);
-    if(dr)dr.style.display=(s.value===fd.options[1])?'flex':'none';
+    if(dr)dr.style.display=(s.value===(fd.okv||fd.options[1]))?'flex':'none';
   }
   paintStat(k);
 }
 function paintStat(k){
   const fd=statFd(k);if(!fd)return;
   const s=document.getElementById('f_'+k+'_s');if(!s)return;
-  s.className=(s.value===fd.options[1])?'pos':'neg';
+  s.className=(s.value===(fd.okv||fd.options[1]))?'pos':(s.value==='保留'?'hold':'neg');
 }
 function addOption(k){
   const fd=catOf(activeCat).fields.find(x=>x.k===k);if(!fd)return;
@@ -1401,6 +1431,22 @@ function renderKanriDash(){
     return;
   }
   const today=kToday();
+  let karteHtml='';
+  const kartes=entries.filter(e=>e.cat==='kanri'&&!e.arch)
+    .slice().sort((a,b)=>String((a.data||{}).partner||'').localeCompare(String((b.data||{}).partner||''),'ja'));
+  if(kartes.length){
+    karteHtml='<div class="kd-title" style="margin-top:12px">顧客カルテ '+kartes.length+'件(タップで内容確認・編集)</div>'+kartes.map(e=>{
+      const d=e.data||{};
+      const bits=[];
+      bits.push('<span class="kd-cust">'+esc(d.partner||'(顧客未設定)')+'</span>');
+      if(d.ktype)bits.push('<span class="badge">'+esc(d.ktype)+'</span>');
+      if(d.ktype==='法人'&&valid_md4(d.kessan||''))bits.push('<span class="kd-date">決算 '+d.kessan.slice(0,2)+'/'+d.kessan.slice(2,4)+'</span>');
+      if(valid6(d.kyoka||''))bits.push('<span class="kd-date">許可満了 '+iso6(d.kyoka)+'</span>');
+      if(d.koken==='あり')bits.push('<span class="badge">後見</span>');
+      if(Array.isArray(d.dl)&&d.dl.length)bits.push('<span class="kd-date">手動期限'+d.dl.length+'件</span>');
+      return '<div class="kd-row" onclick="openDetail(\''+escAttr(String(e.id))+'\')"><div class="kd-main">'+bits.join('')+'</div></div>';
+    }).join('');
+  }
   box.innerHTML='<div class="kd-title">期限ダッシュボード(全顧客・近い順)</div>'+list.map(x=>{
     const days=kdDays(x.date);
     const cls=x.over?(x.low?' kd-soon':' kd-over'):(days<=30?' kd-soon':'');
@@ -1420,7 +1466,7 @@ function renderKanriDash(){
     return `<div class="kd-row${cls}" onclick="toggleKd('${escAttr(x.key)}')">
       <div class="kd-main"><span class="kd-days">${dtxt}</span><span class="kd-date num">${dstr(x.date)}</span><span class="kd-cust">${esc(x.cust)}</span><span class="kd-kind">${esc(x.kind)}</span></div>${exp}
     </div>`;
-  }).join('');
+  }).join('')+karteHtml;
 }
 function kdDone(id,key,label){
   askConfirm('「'+label+'」を対応済みにしますか?(毎年ものは次回分の表示に切り替わります)','対応済みにする',()=>{
@@ -1650,7 +1696,7 @@ function entryValues(e){
   });
   return vals;
 }
-let urgOn=false,impOn=false,showDone=false,ankenFilter='',archOn=false;
+let urgOn=false,impOn=false,showDone=false,ankenFilter='',archOn=false,holdOn=false;
 let listLimit=20,catFilter='';
 function searchInput(){listLimit=20;renderTimeline()}
 function toggleCat(id){catFilter=(catFilter===id)?'':id;listLimit=20;paintFilters();renderTimeline()}
@@ -1658,12 +1704,17 @@ function toggleUrg(){urgOn=!urgOn;listLimit=20;paintFilters();renderTimeline()}
 function toggleImp(){impOn=!impOn;listLimit=20;paintFilters();renderTimeline()}
 function toggleDone(){showDone=!showDone;listLimit=20;paintFilters();renderTimeline()}
 function toggleArch(){archOn=!archOn;listLimit=20;paintFilters();renderTimeline()}
+function toggleHold(){holdOn=!holdOn;listLimit=20;paintFilters();renderTimeline()}
 function paintFilters(){
   const set=(id,on)=>{const el=document.getElementById(id);if(el)el.className='fbtn'+(on?' on':'')};
   set('fb_urg',urgOn);
   set('fb_imp',impOn);
   set('fb_done',showDone);
   set('fb_arch',archOn);
+  set('fb_hold',holdOn);
+  set('fb_anken',!!ankenFilter);
+  const fa=document.getElementById('fb_anken');
+  if(fa)fa.textContent=ankenFilter?('案件: '+ankenFilter.slice(0,8)+(ankenFilter.length>8?'…':'')):'案件';
 }
 function passFilters(e){
   const d=e.data||{};
@@ -1676,7 +1727,11 @@ function passFilters(e){
       /* 案件フィルター中: その案件本体+紐づく記録を、完了も含めて全部表示 */
       const linked=(e.cat==='anken'&&ankenLabel(e)===ankenFilter)||(typeof d.anken==='string'&&d.anken===ankenFilter);
       if(!linked)return false;
+    }else if(holdOn){
+      /* 保留庫: 保留だけを表示 */
+      if(d.doneStat!=='保留')return false;
     }else{
+      if(d.doneStat==='保留')return false;
       if(!showDone&&d.doneStat==='完了')return false;
     }
   }
@@ -1685,12 +1740,12 @@ function passFilters(e){
   if(impOn&&!p.includes('重要'))return false;
   return true;
 }
-const CAT_ORDER={task:1,kanri:2,jikan:3,shukan:4,pf:5,shushi:6,anken:7,bukken:8,neta:9,houjin:10,kojin:11,orei:12,genkin:13};
+const CAT_ORDER={task:1,kanri:2,jikan:3,shukan:4,pf:5,shushi:6,anken:7,bukken:8,neta:9,recipe:10,houjin:11,kojin:12,orei:13,genkin:14};
 function catOrderRel(e){
   if(e.cat===activeCat)return 0;
   return (CAT_ORDER[e.cat]||50)+1;
 }
-function doneRank(e){return (e.data&&e.data.doneStat==='完了')?1:0}
+function doneRank(e){const st=(e.data||{}).doneStat;return st==='完了'?2:(st==='保留'?1:0)}
 function sortForList(list){return list.sort((a,b)=>catOrderRel(a)-catOrderRel(b)||doneRank(a)-doneRank(b)||((b.ts||0)-(a.ts||0)))}
 function matches(e,q){
   const hay=[catName(e.cat),...entryValues(e)].join(' ');
@@ -1709,7 +1764,8 @@ function summaryHTML(e){
   });
   statlines(e.cat).forEach(fd=>{
     const sv=d[fd.sk]||fd.options[0];
-    badges+=`<span class="badge ${sv===fd.options[1]?'bgreen':'bred'}">${esc(sv)}</span>`;
+    const bcls=(sv===(fd.okv||fd.options[1]))?'bgreen':(sv==='保留'?'bgray':'bred');
+    badges+=`<span class="badge ${bcls}">${esc(sv)}</span>`;
   });
   badges+=fs.filter(f=>f.type==='select'&&d[f.k]&&d[f.k]!=='未設定'&&f.k!=='io').map(f=>{
     const val=d[f.k];const lab=(f.labels&&f.labels[val])||val;
@@ -1720,7 +1776,7 @@ function summaryHTML(e){
   if(e.arch)badges+=`<span class="badge">アーカイブ</span>`;
   const persons=fs.filter(f=>f.type==='person'&&d[f.k]&&f.k!=='delegate').map(f=>d[f.k]);
   let parts=[];
-  if(persons.length)parts.push('<b>'+esc(persons.join(' / '))+'</b>');
+  if(persons.length)parts.push(esc(persons.join(' / ')));
   if(d.amount!==''&&d.amount!==undefined){
     const cls=d.io==='収入'?'amt-in':(d.io==='支出'?'amt-out':'');
     const sign=d.io==='収入'?'＋':(d.io==='支出'?'−':'');
@@ -1737,7 +1793,7 @@ function renderTimeline(){
   const q=document.getElementById('searchBox').value.trim();
   const el=document.getElementById('timeline');el.innerHTML='';
   const list=sortForList(entries.filter(passFilters).filter(e=>!q||matches(e,q)));
-  if(!list.length){el.innerHTML='<div class="empty-timeline">表示できる記録がありません(完了分は「完了を含む」で表示されます)</div>';renderBanner();renderKanriDash();return}
+  if(!list.length){el.innerHTML='<div class="empty-timeline">表示できる記録がありません(完了分は「完了を含む」、保留分は「保留」で表示されます)</div>';renderBanner();renderKanriDash();return}
   const shown=list.slice(0,listLimit);
   shown.forEach(e=>{
     const s=summaryHTML(e);
@@ -1779,7 +1835,7 @@ function openDetail(id){
       const sv=e.data[f.sk]||f.options[0];
       const dspan=f.dk?`<span style="font-size:.85rem;color:var(--sub)">${f.dlabel.replace('(6桁)','')}: <span class="num">${e.data[f.dk]?iso6(e.data[f.dk]):'—'}</span></span>`:'';
       return `<div class="dl"><div class="k">${f.label}</div><div class="v">
-        <span class="bpill ${sv===f.options[1]?'green':'red'}">${esc(sv)}</span>
+        <span class="bpill ${(sv===(f.okv||f.options[1]))?'green':(sv==='保留'?'gray':'red')}">${esc(sv)}</span>
         ${dspan}</div></div>`;
     }
     let v=e.data[f.k];
@@ -1791,6 +1847,7 @@ function openDetail(id){
     if(f.type==='date6o')v=iso6(v)||v;
     if(f.type==='time4')v=fmt4(v)||v;
     if(f.type==='md4')v=(typeof v==='string'&&v.length===4)?v.slice(0,2)+'/'+v.slice(2,4):v;
+    if(f.type==='unitnum')v=v+(f.unit||'');
     if(f.type==='deadlist')v=(v||[]).map(x=>x.n+'('+(iso6(x.d)||x.d)+(x.r?'・毎年':'')+')').join('、');
     if(f.type==='select'&&f.labels&&f.labels[v])v=f.labels[v]+'('+v+')';
     return `<div class="dl"><div class="k">${f.label.replace(/(＋.*)/,'').trim()}</div><div class="v">${esc(v)}</div></div>`;
@@ -1799,9 +1856,19 @@ function openDetail(id){
   if(e.arch){
     acts.innerHTML='<button onclick="copyOne()">この1件をコピー</button><button onclick="unarchiveOne()">一覧に戻す</button><button class="danger" onclick="hardDeleteOne()">完全削除</button>';
   }else{
-    acts.innerHTML='<button onclick="copyOne()">この1件をコピー</button><button onclick="editOne()">編集する</button><button class="danger" onclick="archiveOne()">アーカイブ</button>';
+    let btns='<button onclick="copyOne()">この1件をコピー</button><button onclick="editOne()">編集する</button>';
+    if(e.data&&e.data.anken&&e.cat!=='anken')btns+='<button onclick="jumpToAnken()">紐づく案件を開く</button>';
+    btns+='<button class="danger" onclick="archiveOne()">アーカイブ</button>';
+    acts.innerHTML=btns;
   }
   document.getElementById('detailOverlay').classList.add('open');
+}
+function jumpToAnken(){
+  const cur=entries.find(x=>String(x.id)===String(detailId));
+  if(!cur||!cur.data||!cur.data.anken)return;
+  const t=entries.find(x=>x.cat==='anken'&&ankenLabel(x)===cur.data.anken);
+  if(!t){toast('紐づく案件が見つかりません(案件の内容や相手方が後から変わった可能性があります)');return}
+  openDetail(t.id);
 }
 function closeDetail(){document.getElementById('detailOverlay').classList.remove('open')}
 function entryText(e){
@@ -1822,6 +1889,7 @@ function entryText(e){
     if(f.type==='date6o')v=iso6(v)||v;
     if(f.type==='time4')v=fmt4(v)||v;
     if(f.type==='md4')v=(typeof v==='string'&&v.length===4)?v.slice(0,2)+'/'+v.slice(2,4):v;
+    if(f.type==='unitnum')v=v+(f.unit||'');
     if(f.type==='deadlist')v=(v||[]).map(x=>x.n+'('+(iso6(x.d)||x.d)+(x.r?'・毎年':'')+')').join('、');
     lines.push(f.label.replace(/[(（][^)）]*[)）]/g,'').replace(/(＋.*)/,'').trim()+': '+v);
   });
