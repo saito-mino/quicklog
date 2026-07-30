@@ -115,6 +115,9 @@ textarea.big{min-height:170px}
 .rec:hover{border-color:var(--sub)}
 .rec .tabmark{flex:0 0 8px}
 .rec .body{padding:10px 14px;flex:1;min-width:0}
+.rec .qdone{flex:0 0 auto;align-self:stretch;min-width:52px;border:none;border-left:1px solid var(--line);background:transparent;color:var(--ok);font-size:.74rem;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0 8px}
+.rec .qdone span{font-size:1.05rem;line-height:1}
+.rec .qdone:active{background:var(--ok);color:#fff}
 .rec .meta{display:flex;gap:10px;align-items:baseline;font-size:.74rem;color:var(--sub);margin-bottom:2px;flex-wrap:wrap}
 .rec .cat{font-weight:700;color:var(--ink)}
 .badge{font-size:.68rem;border:1px solid var(--line);border-radius:10px;padding:0 8px;color:var(--sub);background:#F6F7F5}
@@ -355,7 +358,7 @@ const PALETTE=['#3B6FB5','#7B5EA7','#5F7F5F','#9E5E8A','#A84A3B','#4E6E9E','#8A7
 
 /* =============== 同期レイヤー(GAS+スプレッドシート) =============== */
 const GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
-const APP_VER='v43';
+const APP_VER='v44';
 const LS_KEY='ql_key', LS_CACHE='ql_cache_v24', LS_OUTBOX='ql_outbox_v1';
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
@@ -1819,6 +1822,13 @@ function renderTimeline(){
         <span class="txt">${s.line||'(内容なし)'}</span>
       </div>`;
     d.onclick=()=>openDetail(e.id);
+    if(canQuickDone(e)){
+      const qb=document.createElement('button');
+      qb.className='qdone';qb.type='button';
+      qb.innerHTML='<span>✓</span>完了';
+      qb.onclick=ev=>{ev.stopPropagation();quickDone(e.id)};
+      d.appendChild(qb);
+    }
     el.appendChild(d);
   });
   if(list.length>shown.length){
@@ -1922,6 +1932,26 @@ function editOne(){
     renderTabs();renderFields(e.data);closeDetail();
     window.scrollTo({top:0});
     toast('修正して保存してください');
+  });
+}
+function canQuickDone(e){
+  if(e.arch)return false;
+  const fd=statlines(e.cat).find(f=>f.sk==='doneStat');
+  if(!fd)return false;
+  return ((e.data||{}).doneStat||fd.options[0])!=='完了';
+}
+function quickDone(id){
+  askConfirm('この記録を「完了」にしますか?','完了にする',()=>{
+    const e=entries.find(x=>String(x.id)===String(id));
+    if(!e)return;
+    const d=e.data||(e.data={});
+    d.doneStat='完了';
+    if(!d.doneDate)d.doneDate=today6();
+    if(!d.doneAt)d.doneAt=nowStamp();
+    saveLocal();
+    enqueue({action:'save',entry:e,cols:colsOf(e)});
+    renderTimeline();
+    toast('完了にしました');
   });
 }
 function archiveOne(){
