@@ -149,6 +149,7 @@ textarea.big{min-height:170px}
 .kd-main{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
 .kd-days{font-weight:800;font-size:.92rem;min-width:70px}
 .kd-over .kd-days{color:var(--danger)}
+.kd-sub{color:var(--sub);font-size:.78rem;white-space:nowrap}
 .kd-soon .kd-days{color:#7A5C00}
 .kd-date{font-size:.78rem;color:var(--sub)}
 .kd-cust{font-weight:700;font-size:.9rem}
@@ -359,8 +360,8 @@ const PALETTE=['#3B6FB5','#7B5EA7','#5F7F5F','#9E5E8A','#A84A3B','#4E6E9E','#8A7
 
 /* =============== 同期レイヤー(GAS+スプレッドシート) =============== */
 const GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
-const APP_VER='v46';
-const LS_KEY='ql_key', LS_CACHE='ql_cache_v26', LS_OUTBOX='ql_outbox_v1';
+const APP_VER='v52';
+const LS_KEY='ql_key', LS_CACHE='ql_cache_v29', LS_OUTBOX='ql_outbox_v1';
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 let apiKey=lsGet(LS_KEY)||'';
@@ -375,7 +376,7 @@ function loadLocal(){
     let c=JSON.parse(lsGet(LS_CACHE)||'null');
     if(!c){
       /* 旧バージョンのキャッシュから記録・人物リストだけ引き継ぐ(タブ構成は新定義を使う) */
-      const old=JSON.parse(lsGet('ql_cache_v25')||lsGet('ql_cache_v24')||lsGet('ql_cache_v23')||lsGet('ql_cache_v22')||lsGet('ql_cache_v21')||lsGet('ql_cache_v20')||lsGet('ql_cache_v19')||lsGet('ql_cache_v18')||lsGet('ql_cache_v17')||lsGet('ql_cache_v16')||lsGet('ql_cache_v15')||lsGet('ql_cache_v14')||lsGet('ql_cache_v13')||lsGet('ql_cache_v12')||lsGet('ql_cache_v11')||lsGet('ql_cache_v10')||lsGet('ql_cache_v9')||lsGet('ql_cache_v8')||lsGet('ql_cache_v7')||lsGet('ql_cache_v6')||lsGet('ql_cache_v5')||lsGet('ql_cache_v4')||lsGet('ql_cache_v3')||lsGet('ql_cache_v1')||'null');
+      const old=JSON.parse(lsGet('ql_cache_v28')||lsGet('ql_cache_v27')||lsGet('ql_cache_v26')||lsGet('ql_cache_v25')||lsGet('ql_cache_v24')||lsGet('ql_cache_v23')||lsGet('ql_cache_v22')||lsGet('ql_cache_v21')||lsGet('ql_cache_v20')||lsGet('ql_cache_v19')||lsGet('ql_cache_v18')||lsGet('ql_cache_v17')||lsGet('ql_cache_v16')||lsGet('ql_cache_v15')||lsGet('ql_cache_v14')||lsGet('ql_cache_v13')||lsGet('ql_cache_v12')||lsGet('ql_cache_v11')||lsGet('ql_cache_v10')||lsGet('ql_cache_v9')||lsGet('ql_cache_v8')||lsGet('ql_cache_v7')||lsGet('ql_cache_v6')||lsGet('ql_cache_v5')||lsGet('ql_cache_v4')||lsGet('ql_cache_v3')||lsGet('ql_cache_v1')||'null');
       if(old)c={entries:old.entries,groups:old.groups,recentPeople:old.recentPeople};
     }
     if(c){
@@ -405,11 +406,6 @@ function migrate(){
         en.data.date=String(t.getFullYear()).slice(2)+pad2(t.getMonth()+1)+pad2(t.getDate());
         enqueue({action:'save',entry:en,cols:colsOf(en)},true);
       }
-    }
-    if(en.cat==='kanri'&&en.data){
-      const kd0=en.data;
-      if(!kd0.gtype){if(kd0.ktype==='個人'){kd0.gtype='一般'}else{kd0.gtype='業者';if(!kd0.htype)kd0.htype='法人'}}
-      if(kd0.gtype==='業者'&&!kd0.htype)kd0.htype='法人';
     }
     if(en.cat==='orei')en.cat='pf'; /* 御恩タブ廃止: 既存記録はメモへ */
     if(en.cat==='shukan'&&en.data){
@@ -450,6 +446,53 @@ function migrate(){
       srcAnken:en.id,note:'',doneKeys:[]}});
   });
   newSeikyu.forEach(x=>{entries.unshift(x);enqueue({action:'save',entry:x,cols:colsOf(x)},true)});
+  /* 管理カルテの一本化: 旧形式は直接変換、業務別に分かれたカルテは顧客ごとに合体 */
+  const BIZMAP={'会計':'会計','建設業許可':'建設','産廃業許可':'産廃','宅建業許可':'宅建','ビザ申請':'ビザ','法定後見':'後見','任意後見':'後見'};
+  const MERGEK=['htype','kessan','sales1','sales2','sales3','capital','shares','est','kaigyo','aoiro','kazei','honsoku','kyoka','kyoka_no','sanpai','sanpai_no','takken','takken_no','takkenshi','zairyu','zexp','toritsugi','bday','souzoku','startd'];
+  const groupsK={};
+  entries.forEach(en=>{
+    if(en.cat!=='kanri'||!en.data)return;
+    const ad=en.data;
+    if(Array.isArray(ad.bizs))return; /* 新形式 */
+    if(ad.mergedInto)return; /* 合体済みの控え */
+    if(!ad.biz){
+      /* v39/v46形式 → その場で新形式へ */
+      const bz=[];
+      const isIppan=(ad.gtype==='一般')||(!ad.gtype&&ad.ktype==='個人');
+      if(!isIppan||valid_md4(ad.kessan||'')||!!ad.sales1||!!ad.sales2||!!ad.sales3)bz.push('会計');
+      if(valid6(ad.kyoka||''))bz.push('建設');
+      if(valid6(ad.takken||'')||valid6(ad.takkenshi||''))bz.push('宅建');
+      if(valid6(ad.zexp||'')||ad.zairyu||valid6(ad.toritsugi||''))bz.push('ビザ');
+      if(ad.koken==='あり'||valid_ymd8(ad.bday||''))bz.push('後見');
+      ad.bizs=bz;
+      if(!ad.htype)ad.htype=isIppan?'個人':'法人';
+      if(ad.permits&&!ad.kyoka_no)ad.kyoka_no=ad.permits;
+      if(bz.includes('後見')&&!ad.kkind)ad.kkind='不明';
+      ['permits','gtype','ktype','staff','koken'].forEach(k=>delete ad[k]);
+      enqueue({action:'save',entry:en,cols:colsOf(en)},true);
+      return;
+    }
+    const pk=ad.partner||('(無名)'+en.id);
+    (groupsK[pk]=groupsK[pk]||[]).push(en);
+  });
+  Object.keys(groupsK).forEach(pk=>{
+    const arr=groupsK[pk].sort((a,b)=>((a.data.srcKanri?1:0)-(b.data.srcKanri?1:0))||((a.ts||0)-(b.ts||0)));
+    const main=arr[0],md=main.data,bz=[];
+    const absorb=ad=>{
+      const b=BIZMAP[ad.biz];if(b&&!bz.includes(b))bz.push(b);
+      MERGEK.forEach(k=>{if((md[k]===undefined||md[k]==='')&&ad[k]!==undefined&&ad[k]!=='')md[k]=ad[k]});
+      if(ad.biz==='法定後見'){md.kkind='法定後見';if(ad.kaishi&&!md.startd)md.startd=ad.kaishi}
+      if(ad.biz==='任意後見'){if(!md.kkind)md.kkind='任意後見';if(ad.keiyakubi&&!md.startd)md.startd=ad.keiyakubi}
+      if(ad!==md&&ad.note)md.note=(md.note?md.note+'\n':'')+ad.note;
+      if(Array.isArray(ad.doneKeys))md.doneKeys=Array.from(new Set([].concat(md.doneKeys||[],ad.doneKeys)));
+    };
+    absorb(md);
+    arr.slice(1).forEach(x=>{absorb(x.data);x.arch=true;x.data.mergedInto=String(main.id);enqueue({action:'save',entry:x,cols:colsOf(x)},true)});
+    md.bizs=sortFlags(bz);
+    if(bz.includes('後見')&&!md.kkind)md.kkind='不明';
+    delete md.biz;delete md.srcKanri;delete md.kaishi;delete md.keiyakubi;
+    enqueue({action:'save',entry:main,cols:colsOf(main)},true);
+  });
 }
 function updStat(msg){
   const el=document.getElementById('syncStat');if(!el)return;
@@ -475,7 +518,7 @@ async function flush(){
   }
   flushing=false;updStat();
 }
-const OTHER_LABEL={engage:'区分',source:'経路',souzoku:'相続・家族',genen:'減塩',floors:'階段',tsumiWhat:'積立対象',tsumiAmt:'積立額',pieces:'片付け',scope:'守備範囲',delegate:'依頼先',kyodo:'共同',introducers:'紹介者',start:'開始',end:'終了',ktype:'区分',gtype:'区分',htype:'形態',kaigyo:'開業日',takken:'宅建業満了',takkenshi:'宅建士証満了',toritsugi:'申請取次満了',zairyu:'在留資格',zexp:'在留満了',kessan:'決算月日',kazei:'消費税',kyoka:'許可満了',koken:'後見',bday:'誕生日',dl:'手動期限',budget:'金額',area:'エリア',zoning:'用途地域',size:'広さ・坪数',youto:'用途',idea:'対策',free:'自由記述',deal:'売買',prio:'区分',anken:'案件',est:'設立日',fiscal:'決算期',capital:'資本金',shares:'株式数',permits:'許認可',aoiro:'申告',kazei:'消費税',honsoku:'課税方式',sales1:'売上2期前',sales2:'売上前期',sales3:'売上当期予想',bd1:'誕生日①',bd2:'誕生日②',bd3:'誕生日③',ng1:'年賀状①',ng2:'年賀状②',ng3:'年賀状③',sm1:'暑中①',sm2:'暑中②',sm3:'暑中③'};
+const OTHER_LABEL={engage:'区分',source:'経路',souzoku:'相続・家族',genen:'減塩',floors:'階段',tsumiWhat:'積立対象',tsumiAmt:'積立額',pieces:'片付け',scope:'守備範囲',delegate:'依頼先',kyodo:'共同',introducers:'紹介者',start:'開始',end:'終了',ktype:'区分',gtype:'区分',biz:'業務',bizs:'業務',htype:'形態',kkind:'後見種別',startd:'契約・審判日',kyoka_no:'建設許可番号',sanpai:'産廃満了',sanpai_no:'産廃許可番号',takken_no:'宅建免許番号',kaishi:'開始審判日',keiyakubi:'契約日',kaigyo:'開業日',takken:'宅建業満了',takkenshi:'宅建士証満了',toritsugi:'申請取次満了',zairyu:'在留資格',zexp:'在留満了',kessan:'決算月日',kazei:'消費税',kyoka:'許可満了',koken:'後見',bday:'誕生日',dl:'手動期限',budget:'金額',area:'エリア',zoning:'用途地域',size:'広さ・坪数',youto:'用途',idea:'対策',free:'自由記述',deal:'売買',prio:'区分',anken:'案件',est:'設立日',fiscal:'決算期',capital:'資本金',shares:'株式数',permits:'許認可',aoiro:'申告',kazei:'消費税',honsoku:'課税方式',sales1:'売上2期前',sales2:'売上前期',sales3:'売上当期予想',bd1:'誕生日①',bd2:'誕生日②',bd3:'誕生日③',ng1:'年賀状①',ng2:'年賀状②',ng3:'年賀状③',sm1:'暑中①',sm2:'暑中②',sm3:'暑中③'};
 function oLabel(f){return OTHER_LABEL[f.k]||String(f.label||f.k).replace(/[(（].*$/,'').trim()}
 function colsOf(e){
   const fs=catFields(e.cat),d=e.data;
@@ -504,7 +547,7 @@ function colsOf(e){
         else if(v){others.push(oLabel(f)+': '+v)}
         break;
       case 'flags':
-        if(Array.isArray(v)&&v.length)others.push('区分: '+v.join('・'));
+        if(Array.isArray(v)&&v.length)others.push((f.k==='bizs'?'業務':'区分')+': '+v.join('・'));
         break;
       case 'statline':
         if(f.k==='done'){c.done=d[f.sk]||'';c.doneDate=iso6(d[f.dk]||'')}
@@ -558,7 +601,7 @@ let cfgTimer=null;
 function cfgSync(){
   clearTimeout(cfgTimer);
   cfgTimer=setTimeout(()=>{
-    enqueue({action:'config',name:'cats26',value:cats});
+    enqueue({action:'config',name:'cats29',value:cats});
     enqueue({action:'config',name:'groups',value:groups});
     enqueue({action:'config',name:'recent',value:recentPeople});
   },1200);
@@ -585,7 +628,7 @@ async function fetchAll(){
     sv.sort((a,b)=>(b.ts||0)-(a.ts||0));
     entries=sv;
     if(j.config){
-      if(Array.isArray(j.config.cats26)&&j.config.cats26.length)cats=j.config.cats26;
+      if(Array.isArray(j.config.cats29)&&j.config.cats29.length)cats=j.config.cats29;
       if(Array.isArray(j.config.groups)&&j.config.groups.length)groups=j.config.groups;
       if(Array.isArray(j.config.recent))recentPeople=j.config.recent;
     }
@@ -651,30 +694,34 @@ let cats=[
    {k:'prio',label:'区分(必須)',type:'flags',required:true,options:['緊急','重要','なし'],cls:{'緊急':'prio-a','重要':'prio-b'}},
    {k:'content',label:'内容',type:'bigtext',ph:'内容をパパッと書く',main:1}]},
  {id:'kanri',name:'管理',color:'#1F5C5C',text:'#fff',fields:[
+   {k:'bizs',label:'業務(受任しているものをタップでオン)',type:'flags',options:['基本','会計','建設','産廃','宅建','ビザ','後見'],alwaysOn:['基本']},
    {k:'partner',label:'顧客(自分も1件登録)',type:'person'},
-   {k:'gtype',label:'区分',type:'select',options:['業者','一般'],def:'業者'},
-   {k:'htype',label:'形態',type:'select',options:['法人','個人'],def:'法人',showIf:{k:'gtype',v:'業者'}},
-   {k:'kessan',label:'決算月日(4桁・例0331)',type:'md4',showIfAll:[{k:'gtype',v:'業者'},{k:'htype',v:'法人'}]},
-   {k:'aoiro',label:'申告',type:'select',dd:1,options:['青色','白色','不明'],def:'不明',row:'t',showIf:{k:'gtype',v:'業者'}},
-   {k:'kazei',label:'消費税',type:'select',dd:1,options:['課税','免税','不明'],def:'不明',row:'t',showIf:{k:'gtype',v:'業者'}},
-   {k:'honsoku',label:'課税方式',type:'select',dd:1,options:['本則課税','簡易課税','不明'],labels:{'本則課税':'本則','簡易課税':'簡易'},def:'不明',row:'t',showIf:{k:'gtype',v:'業者'}},
-   {k:'sales1',label:'売上:2期前(円)',type:'amount',row:'s',showIf:{k:'gtype',v:'業者'}},
-   {k:'sales2',label:'売上:前期(円)',type:'amount',row:'s',showIf:{k:'gtype',v:'業者'}},
-   {k:'sales3',label:'売上:当期予想(円)',type:'amount',row:'s',showIf:{k:'gtype',v:'業者'}},
-   {k:'est',label:'設立日',type:'text',ph:'例:1998-04-01',row:'e',showIfAll:[{k:'gtype',v:'業者'},{k:'htype',v:'法人'}]},
-   {k:'kaigyo',label:'開業日',type:'text',ph:'例:2010-04-01',row:'e',showIfAll:[{k:'gtype',v:'業者'},{k:'htype',v:'個人'}]},
-   {k:'permits',label:'許認可',type:'text',ph:'例:建設業(般-6)第○号',row:'e',showIf:{k:'gtype',v:'業者'}},
-   {k:'capital',label:'資本金(円)',type:'amount',row:'c',showIfAll:[{k:'gtype',v:'業者'},{k:'htype',v:'法人'}]},
-   {k:'shares',label:'株式数',type:'text',ph:'例:100株',row:'c',showIfAll:[{k:'gtype',v:'業者'},{k:'htype',v:'法人'}]},
-   {k:'kyoka',label:'建設業許可 満了日(6桁・任意)',type:'date6o',row:'k',showIf:{k:'gtype',v:'業者'}},
-   {k:'takken',label:'宅建業免許 満了日(6桁・任意)',type:'date6o',row:'k',showIf:{k:'gtype',v:'業者'}},
-   {k:'takkenshi',label:'宅建士証 満了日(6桁・任意)',type:'date6o',row:'q',showIf:{k:'gtype',v:'一般'}},
-   {k:'toritsugi',label:'申請取次 満了日(6桁・任意)',type:'date6o',row:'q',showIf:{k:'gtype',v:'一般'}},
-   {k:'zairyu',label:'在留資格',type:'text',ph:'例:技術・人文知識・国際業務',row:'z',showIf:{k:'gtype',v:'一般'}},
-   {k:'zexp',label:'在留 満了日(6桁・任意)',type:'date6o',row:'z',showIf:{k:'gtype',v:'一般'}},
-   {k:'koken',label:'後見契約',type:'select',dd:1,options:['なし','あり','不明'],def:'なし',showIf:{k:'gtype',v:'一般'}},
-   {k:'bday',label:'誕生日(8桁 年月日・例19850506)',type:'ymd8',showIf:{k:'gtype',v:'一般'}},
-   {k:'souzoku',label:'相続・家族の状況',type:'textarea',ph:'家族構成・相続の懸念・後見の経緯など(任意)',showIf:{k:'gtype',v:'一般'}},
+   {k:'htype',label:'形態',type:'select',options:['法人','個人'],def:'法人'},
+   {k:'kessan',label:'決算月日(4桁・例0331)',type:'md4',row:'e',showIf:{k:'htype',v:'法人'}},
+   {k:'est',label:'設立日',type:'text',ph:'例:1998-04-01',row:'e',showIf:{k:'htype',v:'法人'}},
+   {k:'kaigyo',label:'開業日',type:'text',ph:'例:2010-04-01',row:'e',showIf:{k:'htype',v:'個人'}},
+   {k:'capital',label:'資本金(円)',type:'amount',row:'c',showIf:{k:'htype',v:'法人'}},
+   {k:'shares',label:'株式数',type:'text',ph:'例:100株',row:'c',showIf:{k:'htype',v:'法人'}},
+   {k:'aoiro',label:'申告',type:'select',dd:1,options:['青色','白色','不明'],def:'不明',row:'t',showIf:{k:'bizs',v:'会計'}},
+   {k:'kazei',label:'消費税',type:'select',dd:1,options:['課税','免税','不明'],def:'不明',row:'t',showIf:{k:'bizs',v:'会計'}},
+   {k:'honsoku',label:'課税方式',type:'select',dd:1,options:['本則課税','簡易課税','不明'],labels:{'本則課税':'本則','簡易課税':'簡易'},def:'不明',row:'t',showIf:{k:'bizs',v:'会計'}},
+   {k:'sales1',label:'売上:2期前(円)',type:'amount',row:'s',showIf:{k:'bizs',v:'会計'}},
+   {k:'sales2',label:'売上:前期(円)',type:'amount',row:'s',showIf:{k:'bizs',v:'会計'}},
+   {k:'sales3',label:'売上:当期予想(円)',type:'amount',row:'s',showIf:{k:'bizs',v:'会計'}},
+   {k:'kyoka_no',label:'建設業 許可番号(任意)',type:'text',ph:'例:福岡県知事(般-6)第○号',row:'k1',showIf:{k:'bizs',v:'建設'}},
+   {k:'kyoka',label:'建設業 満了日(6桁)',type:'date6o',row:'k1',showIf:{k:'bizs',v:'建設'}},
+   {k:'sanpai_no',label:'産廃 許可番号(任意)',type:'text',ph:'例:第00900000001号',row:'k2',showIf:{k:'bizs',v:'産廃'}},
+   {k:'sanpai',label:'産廃 満了日(6桁)',type:'date6o',row:'k2',showIf:{k:'bizs',v:'産廃'}},
+   {k:'takken_no',label:'宅建業 免許番号(任意)',type:'text',ph:'例:福岡県知事(2)第○号',row:'k3',showIf:{k:'bizs',v:'宅建'}},
+   {k:'takken',label:'宅建業 満了日(6桁)',type:'date6o',row:'k3',showIf:{k:'bizs',v:'宅建'}},
+   {k:'takkenshi',label:'宅建士証 満了日(6桁・任意)',type:'date6o',showIf:{k:'bizs',v:'宅建'}},
+   {k:'zairyu',label:'在留資格',type:'text',ph:'例:技術・人文知識・国際業務',row:'z',showIf:{k:'bizs',v:'ビザ'}},
+   {k:'zexp',label:'在留 満了日(6桁)',type:'date6o',row:'z',showIf:{k:'bizs',v:'ビザ'}},
+   {k:'toritsugi',label:'申請取次 届出満了日(6桁・任意・自分用)',type:'date6o',showIf:{k:'bizs',v:'ビザ'}},
+   {k:'kkind',label:'後見の種別',type:'select',dd:1,options:['任意後見','法定後見','不明'],def:'不明',showIf:{k:'bizs',v:'後見'}},
+   {k:'startd',label:'契約日・審判日(任意)',type:'text',ph:'例:2024-05-01',showIf:{k:'bizs',v:'後見'}},
+   {k:'bday',label:'誕生日(8桁 年月日・例19850506)',type:'ymd8',showIf:{k:'bizs',v:'後見'}},
+   {k:'souzoku',label:'相続・家族の状況',type:'textarea',ph:'家族構成・相続の懸念・後見の経緯など(任意)',showIf:{k:'bizs',v:'後見'}},
    {k:'note',label:'備考',type:'textarea',ph:'メモ(任意)'}]},
  {id:'jikan',name:'時間',color:'#5C4326',text:'#fff',fields:[
    {k:'date',label:'日付',type:'date6'},
@@ -963,6 +1010,8 @@ function renderFields(vals={}){
     let fv=vals[x.k];
     if(typeof fv==='string')fv=({'A群':['緊急','重要'],'B群':['緊急'],'C群':['重要'],'D群':[]})[fv]||[];
     selState[x.k]=Array.isArray(fv)?sortFlags(fv.slice()):[];
+    (x.alwaysOn||[]).forEach(v=>{if(!selState[x.k].includes(v))selState[x.k].push(v)});
+    selState[x.k]=sortFlags(selState[x.k]);
     paintFlags(x);
   });
   c.fields.filter(x=>x.type==='date6').forEach(x=>bindDate6('f_'+x.k,false));
@@ -1176,10 +1225,11 @@ function setSel(k,v){
   if(fd&&fd.optional&&selState[k]===v){selState[k]=''}else{selState[k]=v}
   paintSelect(fd);applyShowIf();applyBigIf();
 }
-const FLAG_ORDER={'緊急':1,'重要':2,'なし':3};
+const FLAG_ORDER={'緊急':1,'重要':2,'なし':3,'基本':10,'会計':11,'建設':12,'産廃':13,'宅建':14,'ビザ':15,'後見':16};
 function sortFlags(arr){return arr.sort((a,b)=>(FLAG_ORDER[a]||9)-(FLAG_ORDER[b]||9))}
 function setFlag(k,v){
   const fd=catOf(activeCat).fields.find(x=>x.k===k);if(!fd)return;
+  if((fd.alwaysOn||[]).includes(v))return; /* 常時オンのボタンはオフにできない */
   let arr=(selState[k]||[]).slice();
   if(v==='なし'){
     arr=arr.includes('なし')?[]:['なし'];
@@ -1190,6 +1240,7 @@ function setFlag(k,v){
   }
   selState[k]=sortFlags(arr);
   paintFlags(fd);
+  applyShowIf();
 }
 function paintFlags(fd){
   const el=document.getElementById('f_'+fd.k);if(!el)return;
@@ -1213,7 +1264,9 @@ function paintSelect(fd){
   });
 }
 function showIfOk(fd){
-  const one=c=>{const v=selState[c.k];return c.vs?c.vs.includes(v):v===c.v};
+  const one=c=>{const v=selState[c.k];
+    if(Array.isArray(v))return c.vs?c.vs.some(x=>v.includes(x)):v.includes(c.v);
+    return c.vs?c.vs.includes(v):v===c.v};
   if(Array.isArray(fd.showIfAll))return fd.showIfAll.every(one);
   if(!fd.showIf)return true;
   return one(fd.showIf);
@@ -1409,6 +1462,22 @@ function addMonthsClamp(y,m,d,add){
   const nd=isEnd?lastDst:Math.min(d,lastDst);
   return new Date(ny,nm,nd);
 }
+function annualSeries(calcFn,today,done,kindKey,regTs){
+  /* カルテ登録日の1年前(=1個前分)から次回分までの、未対応の全回を返す */
+  const reg=regTs?new Date(regTs):today;
+  const start=new Date(reg);start.setFullYear(start.getFullYear()-1);
+  let y=today.getFullYear()+2;
+  while(calcFn(y)>today)y--; /* y=直近過去分の年 */
+  const out=[];
+  for(let yy=y-6;yy<=y+1;yy++){
+    const dt=calcFn(yy);
+    if(dt<=today&&dt<start)continue; /* 窓より古い過去分は出さない */
+    const key=kindKey+'@'+dstr(dt);
+    if(done.includes(key))continue;
+    out.push({date:dt,key});
+  }
+  return out.slice(-4); /* 念のため最大4件 */
+}
 function annualFrom(calcFn,today,done,kindKey){
   /* calcFn(y)=その年度分の対象日。直近過去分が未対応なら超過として返し、対応済みなら次回分を返す */
   let y=today.getFullYear()+1;
@@ -1429,64 +1498,75 @@ const KD_KOKEN=[[60,'資料収集'],[30,'報告書作成']];
 function kanriDeadlines(en,today){
   const d=en.data||{},out=[],done=Array.isArray(d.doneKeys)?d.doneKeys:[];
   const cust=d.partner||'(顧客未設定)';
-  const put=(kind,r,steps,low)=>{if(!r)return;out.push({id:en.id,cust,kind,date:r.date,key:r.key,over:r.date<today,steps:steps||null,low:!!low})};
-  const gt=d.gtype||((d.ktype==='個人')?'一般':'業者');
-  const ht=(gt==='業者')?(d.htype||((d.ktype==='個人')?'個人':'法人')):'';
+  const put=(kind,r,steps,low,main)=>{if(!r)return;(Array.isArray(r)?r:[r]).forEach(o=>{const mo=(typeof main==='function')?main(o.date):(main||null);out.push({id:en.id,cust,kind,date:o.date,key:o.key,over:o.date<today,steps:steps||null,low:!!low,main:mo})})};
+  const BIZMAP={'会計':'会計','建設業許可':'建設','産廃業許可':'産廃','宅建業許可':'宅建','ビザ申請':'ビザ','法定後見':'後見','任意後見':'後見'};
+  const bizs=Array.isArray(d.bizs)?d.bizs:(d.biz&&BIZMAP[d.biz]?[BIZMAP[d.biz]]:[]);
   const d6=x=>new Date(+('20'+x.slice(0,2)),+x.slice(2,4)-1,+x.slice(4,6));
   const minus=(dt,days)=>{const t=new Date(dt);t.setDate(t.getDate()-days);return t};
-  if(gt==='業者'){
-    let km=0,kd_=0;
-    if(ht==='個人'){km=12;kd_=31}
-    else if(valid_md4(d.kessan||'')){km=+d.kessan.slice(0,2);kd_=+d.kessan.slice(2,4)}
+  const kmOf=(a)=>{const ht=a.htype||'法人';if(ht==='個人')return[12,31];if(valid_md4(a.kessan||''))return[+a.kessan.slice(0,2),+a.kessan.slice(2,4)];return[0,0]};
+  if(bizs.includes('会計')){
+    const ht=d.htype||'法人';
+    const [km,kd_]=kmOf(d);
     if(km>0){
       if(ht==='個人'){
-        put('確定申告期限(3/15)',annualFrom(y=>new Date(y+1,2,15),today,done,'kakutei'),KD_STD);
-        if(d.kazei!=='免税')put('消費税の申告期限(3/31)',annualFrom(y=>new Date(y+1,2,31),today,done,'shohizei'),KD_STD);
+        put('確定申告期限',annualSeries(y=>new Date(y+1,2,15),today,done,'kakutei',en.ts),KD_STD);
+        if(d.kazei!=='免税')put('消費税の申告期限',annualSeries(y=>new Date(y+1,2,31),today,done,'shohizei',en.ts),KD_STD);
       }else{
-        put('法人税等の申告期限',annualFrom(y=>addMonthsClamp(y,km,kd_,2),today,done,'houjinzei'),KD_STD);
-        if(d.kazei!=='免税')put('消費税の申告期限',annualFrom(y=>addMonthsClamp(y,km,kd_,2),today,done,'shohizei'),KD_STD);
+        put('法人税等の申告期限',annualSeries(y=>addMonthsClamp(y,km,kd_,2),today,done,'houjinzei',en.ts),KD_STD);
+        if(d.kazei!=='免税')put('消費税の申告期限',annualSeries(y=>addMonthsClamp(y,km,kd_,2),today,done,'shohizei',en.ts),KD_STD);
       }
-      if(valid6(d.kyoka||''))put('建設業・決算変更届',annualFrom(y=>addMonthsClamp(y,km,kd_,4),today,done,'kessanhenko'),KD_STD);
-      put('四半期チェック①(決算9ヶ月前)',annualFrom(y=>addMonthsClamp(y,km,kd_,-9),today,done,'q1check'),null,true);
-      put('四半期チェック②(決算6ヶ月前)',annualFrom(y=>addMonthsClamp(y,km,kd_,-6),today,done,'q2check'),null,true);
-      put('四半期チェック③(決算3ヶ月前・来期の消費税方式を検討)',annualFrom(y=>addMonthsClamp(y,km,kd_,-3),today,done,'q3check'),null,true);
-      put('本決算(決算日)',annualFrom(y=>addMonthsClamp(y,km,kd_,0),today,done,'honkessan'),null);
+      const mainQ=o=>{let m=addMonthsClamp(o.getFullYear(),km,kd_,0);if(m<o)m=addMonthsClamp(o.getFullYear()+1,km,kd_,0);return m};
+      put('四半期チェック①',annualSeries(y=>addMonthsClamp(y,km,kd_,-9),today,done,'q1check',en.ts),null,true,mainQ);
+      put('四半期チェック②',annualSeries(y=>addMonthsClamp(y,km,kd_,-6),today,done,'q2check',en.ts),null,true,mainQ);
+      put('四半期チェック③(来期の消費税方式を検討)',annualSeries(y=>addMonthsClamp(y,km,kd_,-3),today,done,'q3check',en.ts),null,true,mainQ);
+      put('本決算',annualSeries(y=>addMonthsClamp(y,km,kd_,0),today,done,'honkessan',en.ts),null);
     }
-  }else{
-    put('確定申告期限(3/15)',annualFrom(y=>new Date(y+1,2,15),today,done,'kakutei'),KD_STD);
   }
-  if(valid6(d.kyoka||'')){
-    const man=d6(d.kyoka);
-    put('建設業許可・更新準備開始(満了3ヶ月前)',fixedFrom(minus(man,90),done,'kyoka_prep'),null);
-    put('建設業許可・更新申請期限(満了30日前)',fixedFrom(minus(man,30),done,'kyoka_limit'),null);
+  if(bizs.includes('建設')){
+    if(valid6(d.kyoka||'')){
+      const man=d6(d.kyoka);
+      put('建設業許可・更新準備開始',fixedFrom(minus(man,90),done,'kyoka_prep'),null,false,man);
+      put('建設業許可・更新申請期限',fixedFrom(minus(man,30),done,'kyoka_limit'),null,false,man);
+    }
+    const [km,kd_]=kmOf(d);
+    if(km>0)put('建設業・決算変更届',annualSeries(y=>addMonthsClamp(y,km,kd_,4),today,done,'kessanhenko',en.ts),KD_STD);
   }
-  if(valid6(d.takken||'')){
-    const man=d6(d.takken);
-    put('宅建業免許・更新準備開始(満了3ヶ月前)',fixedFrom(minus(man,90),done,'takken_prep'),null);
-    put('宅建業免許・更新申請期限(満了30日前)',fixedFrom(minus(man,30),done,'takken_limit'),null);
+  if(bizs.includes('産廃')&&valid6(d.sanpai||'')){
+    const man=d6(d.sanpai);
+    put('産廃業許可・更新準備と講習確認',fixedFrom(minus(man,180),done,'sanpai_prep'),null,false,man);
+    put('産廃業許可・更新申請の目安',fixedFrom(minus(man,60),done,'sanpai_limit'),null,false,man);
   }
-  if(valid6(d.takkenshi||'')){
-    const man=d6(d.takkenshi);
-    put('宅建士証・法定講習の予約(満了180日前)',fixedFrom(minus(man,180),done,'tk_prep'),null);
-    put('宅建士証・満了日',fixedFrom(man,done,'tk_exp'),null);
+  if(bizs.includes('宅建')){
+    if(valid6(d.takken||'')){
+      const man=d6(d.takken);
+      put('宅建業免許・更新受付開始',fixedFrom(minus(man,90),done,'takken_prep'),null,false,man);
+      put('宅建業免許・更新申請期限',fixedFrom(minus(man,30),done,'takken_limit'),null,false,man);
+    }
+    if(valid6(d.takkenshi||'')){
+      const man=d6(d.takkenshi);
+      put('宅建士証・法定講習の予約',fixedFrom(minus(man,180),done,'tk_prep'),null,false,man);
+      put('宅建士証・満了日',fixedFrom(man,done,'tk_exp'),null);
+    }
   }
-  if(valid6(d.toritsugi||'')){
-    const man=d6(d.toritsugi);
-    put('申請取次・効果更新研修の申込(満了60日前)',fixedFrom(minus(man,60),done,'tg_prep'),null);
-    put('申請取次・届出満了日',fixedFrom(man,done,'tg_exp'),null);
+  if(bizs.includes('ビザ')){
+    if(valid6(d.zexp||'')){
+      const man=d6(d.zexp);
+      put('在留期間更新・申請準備',fixedFrom(minus(man,90),done,'za_prep'),null,false,man);
+      put('在留期限',fixedFrom(man,done,'za_exp'),null);
+    }
+    if(valid6(d.toritsugi||'')){
+      const man=d6(d.toritsugi);
+      put('申請取次・効果更新研修の申込',fixedFrom(minus(man,60),done,'tg_prep'),null,false,man);
+      put('申請取次・届出満了日',fixedFrom(man,done,'tg_exp'),null);
+    }
   }
-  if(valid6(d.zexp||'')){
-    const man=d6(d.zexp);
-    put('在留期間更新・申請準備(満了3ヶ月前から申請可)',fixedFrom(minus(man,90),done,'za_prep'),null);
-    put('在留期限(満了日)',fixedFrom(man,done,'za_exp'),null);
-  }
-  if(d.koken==='あり'){
+  if(bizs.includes('後見')){
     if(valid_ymd8(d.bday||'')||valid_md4(d.bday||'')){
       const bm=(d.bday.length===8)?+d.bday.slice(4,6):+d.bday.slice(0,2);
-      put('後見の定期報告(誕生月末日)',annualFrom(y=>new Date(y,bm,0),today,done,'koken'),KD_KOKEN);
+      put('後見の定期報告',annualSeries(y=>new Date(y,bm,0),today,done,'koken',en.ts),KD_KOKEN);
     }
-    put('年賀状の投函(元旦着は12/25まで)',annualFrom(y=>new Date(y,11,25),today,done,'nenga'),null);
-    put('暑中見舞いの投函(目安7/15・立秋まで)',annualFrom(y=>new Date(y,6,15),today,done,'shochu'),null);
+    put('年賀状の投函',annualSeries(y=>new Date(y,11,25),today,done,'nenga',en.ts),null);
+    put('暑中見舞いの投函',annualSeries(y=>new Date(y,6,15),today,done,'shochu',en.ts),null);
   }
   (Array.isArray(d.dl)?d.dl:[]).forEach((x,i)=>{
     if(!valid6(x.d))return;
@@ -1494,7 +1574,7 @@ function kanriDeadlines(en,today){
     const kk='manual'+i+'_'+(x.n||'');
     if(x.r){
       const mm=dt.getMonth()+1,dd=dt.getDate();
-      put(x.n||'手動期限',annualFrom(y=>new Date(y,mm-1,Math.min(dd,new Date(y,mm,0).getDate())),today,done,kk),null);
+      put(x.n||'手動期限',annualSeries(y=>new Date(y,mm-1,Math.min(dd,new Date(y,mm,0).getDate())),today,done,kk,en.ts),null);
     }else{
       put(x.n||'手動期限',fixedFrom(dt,done,kk),null);
     }
@@ -1526,14 +1606,14 @@ function renderKanriDash(){
       const d=e.data||{};
       const bits=[];
       bits.push('<span class="kd-cust">'+esc(d.partner||'(顧客未設定)')+'</span>');
-      const gt=d.gtype||((d.ktype==='個人')?'一般':'業者');
-      const ht=(gt==='業者')?(d.htype||'法人'):'';
-      bits.push('<span class="badge">'+esc(gt+(ht?'・'+ht:''))+'</span>');
-      if(gt==='業者'&&ht==='法人'&&valid_md4(d.kessan||''))bits.push('<span class="kd-date">決算 '+d.kessan.slice(0,2)+'/'+d.kessan.slice(2,4)+'</span>');
+      const bz=Array.isArray(d.bizs)&&d.bizs.length?d.bizs.filter(x=>x!=='基本').join('・'):(d.biz||'');
+      if(bz)bits.push('<span class="badge">'+esc(bz)+'</span>');
+      if(valid_md4(d.kessan||''))bits.push('<span class="kd-date">決算 '+d.kessan.slice(0,2)+'/'+d.kessan.slice(2,4)+'</span>');
       if(valid6(d.kyoka||''))bits.push('<span class="kd-date">建設 '+iso6(d.kyoka)+'</span>');
+      if(valid6(d.sanpai||''))bits.push('<span class="kd-date">産廃 '+iso6(d.sanpai)+'</span>');
       if(valid6(d.takken||''))bits.push('<span class="kd-date">宅建 '+iso6(d.takken)+'</span>');
       if(valid6(d.zexp||''))bits.push('<span class="kd-date">在留 '+iso6(d.zexp)+'</span>');
-      if(d.koken==='あり')bits.push('<span class="badge">後見</span>');
+      if(valid_ymd8(d.bday||''))bits.push('<span class="kd-date">誕 '+d.bday.slice(0,4)+'-'+d.bday.slice(4,6)+'-'+d.bday.slice(6,8)+'</span>');
       if(Array.isArray(d.dl)&&d.dl.length)bits.push('<span class="kd-date">手動期限'+d.dl.length+'件</span>');
       return '<div class="kd-row" onclick="openDetail(\''+escAttr(String(e.id))+'\')"><div class="kd-main">'+bits.join('')+'</div></div>';
     }).join('');
@@ -1541,6 +1621,7 @@ function renderKanriDash(){
   box.innerHTML='<div class="kd-title">期限ダッシュボード(全顧客・近い順)</div>'+list.map(x=>{
     const days=kdDays(x.date);
     const cls=x.over?(x.low?' kd-soon':' kd-over'):(days<=30?' kd-soon':'');
+    const isStep=x.main&&(+x.main)!==(+x.date);
     const dtxt=x.over?('超過 '+(-days)+'日'):('あと '+days+'日');
     let exp='';
     if(kdOpen===x.key){
@@ -1555,7 +1636,7 @@ function renderKanriDash(){
       exp=`<div class="kd-exp">${st}<button type="button" class="kd-donebtn" onclick="event.stopPropagation();kdDone('${escAttr(x.id)}','${escAttr(x.key)}','${escAttr(x.kind)}')">対応した(次回分に切替)</button></div>`;
     }
     return `<div class="kd-row${cls}" onclick="toggleKd('${escAttr(x.key)}')">
-      <div class="kd-main"><span class="kd-days">${dtxt}</span><span class="kd-date num">${dstr(x.date)}</span><span class="kd-cust">${esc(x.cust)}</span><span class="kd-kind">${esc(x.kind)}</span></div>${exp}
+      <div class="kd-main"><span class="kd-days">${dtxt}</span><span class="kd-date num">${dstr(isStep?x.main:x.date)}</span><span class="kd-cust">${esc(x.cust)}</span><span class="kd-kind">${esc(x.kind)}</span>${isStep?`<span class="kd-sub num">(${dstr(x.date)})</span>`:''}</div>${exp}
     </div>`;
   }).join('')+karteHtml;
 }
@@ -1830,7 +1911,7 @@ function summaryHTML(e){
   let badges='';
   fs.filter(f=>f.type==='flags'&&Array.isArray(d[f.k])&&d[f.k].length).forEach(f=>{
     sortFlags(d[f.k].slice()).forEach(fv=>{
-      if(fv==='なし')return;
+      if(fv==='なし'||fv==='基本')return;
       const cls=fv==='緊急'?' pa':fv==='重要'?' pb':'';
       badges+=`<span class="badge${cls}">${esc(fv)}</span>`;
     });
