@@ -150,6 +150,9 @@ textarea.big{min-height:170px}
 .kd-days{font-weight:800;font-size:.92rem;min-width:70px}
 .kd-over .kd-days{color:var(--danger)}
 .kd-sub{color:var(--sub);font-size:.78rem;white-space:nowrap}
+.kd-donerow{opacity:.55}
+.kd-donerow .kd-days{color:var(--ok)}
+.kd-toggle{float:right;font-size:.72rem;padding:3px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--sub);cursor:pointer}
 .kd-soon .kd-days{color:#7A5C00}
 .kd-date{font-size:.78rem;color:var(--sub)}
 .kd-cust{font-weight:700;font-size:.9rem}
@@ -360,7 +363,7 @@ const PALETTE=['#3B6FB5','#7B5EA7','#5F7F5F','#9E5E8A','#A84A3B','#4E6E9E','#8A7
 
 /* =============== 同期レイヤー(GAS+スプレッドシート) =============== */
 const GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
-const APP_VER='v52';
+const APP_VER='v54';
 const LS_KEY='ql_key', LS_CACHE='ql_cache_v29', LS_OUTBOX='ql_outbox_v1';
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
@@ -1462,6 +1465,7 @@ function addMonthsClamp(y,m,d,add){
   const nd=isEnd?lastDst:Math.min(d,lastDst);
   return new Date(ny,nm,nd);
 }
+let KD_WITHDONE=false;
 function annualSeries(calcFn,today,done,kindKey,regTs){
   /* カルテ登録日の1年前(=1個前分)から次回分までの、未対応の全回を返す */
   const reg=regTs?new Date(regTs):today;
@@ -1473,7 +1477,7 @@ function annualSeries(calcFn,today,done,kindKey,regTs){
     const dt=calcFn(yy);
     if(dt<=today&&dt<start)continue; /* 窓より古い過去分は出さない */
     const key=kindKey+'@'+dstr(dt);
-    if(done.includes(key))continue;
+    if(done.includes(key)){if(KD_WITHDONE)out.push({date:dt,key,done:true});continue}
     out.push({date:dt,key});
   }
   return out.slice(-4); /* 念のため最大4件 */
@@ -1490,7 +1494,7 @@ function annualFrom(calcFn,today,done,kindKey){
 }
 function fixedFrom(dt,done,kindKey){
   const key=kindKey+'@'+dstr(dt);
-  if(done.includes(key))return null;
+  if(done.includes(key))return KD_WITHDONE?{date:dt,key,done:true}:null;
   return{date:dt,key};
 }
 const KD_STD=[[30,'資料依頼'],[14,'作成着手'],[7,'最終確認']];
@@ -1498,7 +1502,7 @@ const KD_KOKEN=[[60,'資料収集'],[30,'報告書作成']];
 function kanriDeadlines(en,today){
   const d=en.data||{},out=[],done=Array.isArray(d.doneKeys)?d.doneKeys:[];
   const cust=d.partner||'(顧客未設定)';
-  const put=(kind,r,steps,low,main)=>{if(!r)return;(Array.isArray(r)?r:[r]).forEach(o=>{const mo=(typeof main==='function')?main(o.date):(main||null);out.push({id:en.id,cust,kind,date:o.date,key:o.key,over:o.date<today,steps:steps||null,low:!!low,main:mo})})};
+  const put=(kind,r,steps,low,main)=>{if(!r)return;(Array.isArray(r)?r:[r]).forEach(o=>{const mo=(typeof main==='function')?main(o.date):(main||null);out.push({id:en.id,cust,kind,date:o.date,key:o.key,over:o.date<today&&!o.done,steps:steps||null,low:!!low,main:mo,done:!!o.done})})};
   const BIZMAP={'会計':'会計','建設業許可':'建設','産廃業許可':'産廃','宅建業許可':'宅建','ビザ申請':'ビザ','法定後見':'後見','任意後見':'後見'};
   const bizs=Array.isArray(d.bizs)?d.bizs:(d.biz&&BIZMAP[d.biz]?[BIZMAP[d.biz]]:[]);
   const d6=x=>new Date(+('20'+x.slice(0,2)),+x.slice(2,4)-1,+x.slice(4,6));
@@ -1581,18 +1585,23 @@ function kanriDeadlines(en,today){
   });
   return out;
 }
-function allDeadlines(){
+function allDeadlines(withDone){
   const today=kToday();
-  return entries.filter(e=>e.cat==='kanri'&&!e.arch).flatMap(e=>kanriDeadlines(e,today));
+  KD_WITHDONE=!!withDone;
+  const r=entries.filter(e=>e.cat==='kanri'&&!e.arch).flatMap(e=>kanriDeadlines(e,today));
+  KD_WITHDONE=false;
+  return r;
 }
 let kdOpen='';
 function toggleKd(key){kdOpen=(kdOpen===key)?'':key;renderKanriDash()}
 function kdDays(dt){return Math.round((dt-kToday())/86400000)}
+let kdShowDone=false;
+function toggleKdShowDone(){kdShowDone=!kdShowDone;renderKanriDash()}
 function renderKanriDash(){
   const box=document.getElementById('kanriDash');if(!box)return;
   if(activeCat!=='kanri'){box.style.display='none';return}
   box.style.display='block';
-  const list=allDeadlines().sort((a,b)=>a.date-b.date);
+  const list=allDeadlines(kdShowDone).sort((a,b)=>a.date-b.date);
   if(!list.length){
     box.innerHTML='<div class="kd-title">期限ダッシュボード(全顧客)</div><div style="color:var(--sub);font-size:.85rem;padding:4px 2px 8px">顧客カルテがまだありません。上の入力欄で顧客(自分も1件)を登録すると、期限が自動で並びます。</div>';
     return;
@@ -1618,11 +1627,12 @@ function renderKanriDash(){
       return '<div class="kd-row" onclick="openDetail(\''+escAttr(String(e.id))+'\')"><div class="kd-main">'+bits.join('')+'</div></div>';
     }).join('');
   }
-  box.innerHTML='<div class="kd-title">期限ダッシュボード(全顧客・近い順)</div>'+list.map(x=>{
+  const tglBtn='<button type="button" class="kd-toggle" onclick="event.stopPropagation();toggleKdShowDone()">'+(kdShowDone?'対応済みを隠す':'対応済みを表示')+'</button>';
+  box.innerHTML='<div class="kd-title">期限ダッシュボード(全顧客・近い順)'+tglBtn+'</div>'+list.map(x=>{
     const days=kdDays(x.date);
-    const cls=x.over?(x.low?' kd-soon':' kd-over'):(days<=30?' kd-soon':'');
+    const cls=x.done?' kd-donerow':(x.over?(x.low?' kd-soon':' kd-over'):(days<=30?' kd-soon':''));
     const isStep=x.main&&(+x.main)!==(+x.date);
-    const dtxt=x.over?('超過 '+(-days)+'日'):('あと '+days+'日');
+    const dtxt=x.done?'対応済':(x.over?('超過 '+(-days)+'日'):('あと '+days+'日'));
     let exp='';
     if(kdOpen===x.key){
       let st='';
@@ -1633,12 +1643,32 @@ function renderKanriDash(){
         }).join(' → ');
         st='<div>'+esc(st)+'</div>';
       }
-      exp=`<div class="kd-exp">${st}<button type="button" class="kd-donebtn" onclick="event.stopPropagation();kdDone('${escAttr(x.id)}','${escAttr(x.key)}','${escAttr(x.kind)}')">対応した(次回分に切替)</button></div>`;
+      const btn=x.done
+        ?`<button type="button" class="kd-donebtn" onclick="event.stopPropagation();kdUndo('${escAttr(x.id)}','${escAttr(x.key)}','${escAttr(x.kind)}')">対応済みを取り消す(期限を復活)</button>`
+        :`<button type="button" class="kd-donebtn" onclick="event.stopPropagation();kdDone('${escAttr(x.id)}','${escAttr(x.key)}','${escAttr(x.kind)}')">対応した(次回分に切替)</button>`;
+      exp=`<div class="kd-exp">${st}${btn}</div>`;
     }
     return `<div class="kd-row${cls}" onclick="toggleKd('${escAttr(x.key)}')">
       <div class="kd-main"><span class="kd-days">${dtxt}</span><span class="kd-date num">${dstr(isStep?x.main:x.date)}</span><span class="kd-cust">${esc(x.cust)}</span><span class="kd-kind">${esc(x.kind)}</span>${isStep?`<span class="kd-sub num">(${dstr(x.date)})</span>`:''}</div>${exp}
     </div>`;
   }).join('')+karteHtml;
+}
+function kdUndo(id,key,label){
+  askConfirm('「'+label+'」の対応済みを取り消して、期限を復活させますか?','取り消す',()=>{
+    const e=entries.find(x=>String(x.id)===String(id));
+    if(!e||!Array.isArray(e.data.doneKeys))return;
+    e.data.doneKeys=e.data.doneKeys.filter(k=>k!==key);
+    /* 対応時に作った履歴タスクはアーカイブへ退避 */
+    entries.filter(x=>x.cat==='task'&&!x.arch&&x.data&&x.data.kdKey===key).forEach(x=>{
+      x.arch=true;
+      enqueue({action:'save',entry:x,cols:colsOf(x)},true);
+    });
+    saveLocal();
+    enqueue({action:'save',entry:e,cols:colsOf(e)});
+    kdOpen='';
+    renderKanriDash();renderBanner();renderTimeline();
+    toast('期限を復活させました(履歴は片付けました)');
+  });
 }
 function kdDone(id,key,label){
   askConfirm('「'+label+'」を対応済みにしますか?(毎年ものは次回分の表示に切り替わります)','対応済みにする',()=>{
@@ -1646,11 +1676,21 @@ function kdDone(id,key,label){
     if(!e)return;
     e.data.doneKeys=Array.isArray(e.data.doneKeys)?e.data.doneKeys:[];
     if(!e.data.doneKeys.includes(key))e.data.doneKeys.push(key);
+    /* 履歴: 完了済みタスクとして下の一覧に残す */
+    const dkey=String(key).split('@')[1]||'';
+    const log={id:uid(),cat:'task',ts:Date.now(),data:{
+      date:today6(),doneStat:'完了',doneDate:today6(),doneAt:nowStamp(),
+      partner:(e.data&&e.data.partner)||'',
+      prio:[],
+      content:'【期限対応】'+((e.data&&e.data.partner)||'')+' '+label+(dkey?'('+dkey+'分)':''),
+      kdKey:key,doneKeys:[]}};
+    entries.unshift(log);
     saveLocal();
     enqueue({action:'save',entry:e,cols:colsOf(e)});
+    enqueue({action:'save',entry:log,cols:colsOf(log)});
     kdOpen='';
-    renderKanriDash();renderBanner();
-    toast('対応済みにしました');
+    renderKanriDash();renderBanner();renderTimeline();
+    toast('対応済みにしました(履歴を記録)');
   });
 }
 function renderBanner(){
