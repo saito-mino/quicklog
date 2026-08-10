@@ -70,7 +70,7 @@ textarea.big{min-height:170px}
 .row2.tight .statline select{padding:7px 8px;font-size:.85rem;min-width:0}
 .datepreview{font-size:.72rem;color:var(--sub);margin-left:10px}
 .personbtn{width:100%;text-align:left;border:1px solid var(--line);border-radius:8px;background:#FCFCFB;padding:9px 10px;font-size:16px;cursor:pointer;color:var(--ink);font-family:inherit}
-.personbtn.empty{color:#A9AFB9}
+.personbtn.empty{color:#A9AFB9;min-height:38px}
 /* 複数人選択(チップ+追加) */
 .plchips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 .plchip{border:1px solid var(--line);background:#F6F7F5;border-radius:16px;padding:5px 12px;font-size:.88rem;font-family:inherit}
@@ -153,7 +153,8 @@ textarea.big{min-height:170px}
 .kd-donerow{opacity:.55}
 .kd-donerow .kd-days{color:var(--ok)}
 .kd-toggle{float:right;font-size:.72rem;padding:3px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--sub);cursor:pointer}
-textarea.big.oneline{min-height:46px;height:46px}
+textarea.big.oneline{min-height:46px;height:46px;transition:height .15s ease}
+textarea.big.oneline.expanded{height:240px;min-height:240px}
 .kd-soon .kd-days{color:#7A5C00}
 .kd-date{font-size:.78rem;color:var(--sub)}
 .kd-cust{font-weight:700;font-size:.9rem}
@@ -261,7 +262,6 @@ textarea.big.oneline{min-height:46px;height:46px}
     <button class="fbtn" id="fb_bill" onclick="toggleBill()">未請求</button>
     <button class="fbtn" id="fb_pay" onclick="togglePay()">未入金</button>
   </div>
-  <div class="hint">※ スペース区切りでAND検索(例:「物件 中村」=物件の中の中村様)。「未請求」「未完了」「緊急」などでも絞れます。検索中に「全件コピー」を押すと絞り込んだ結果だけをコピー(AI貼り付け用)</div>
 
   <div class="timeline" id="timeline"></div>
 </div>
@@ -364,7 +364,7 @@ const PALETTE=['#3B6FB5','#7B5EA7','#5F7F5F','#9E5E8A','#A84A3B','#4E6E9E','#8A7
 
 /* =============== 同期レイヤー(GAS+スプレッドシート) =============== */
 const GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
-const APP_VER='v55';
+const APP_VER='v58';
 const LS_KEY='ql_key', LS_CACHE='ql_cache_v30', LS_OUTBOX='ql_outbox_v1';
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
@@ -959,7 +959,7 @@ function formDirty(){
     const d=readFields();
     if(hasBodyOf(c,d))return true;
     const fl=c.fields.find(f=>f.type==='flags');
-    if(fl&&(selState[fl.k]||[]).length)return true;
+    if(fl&&(selState[fl.k]||[]).filter(v=>!(fl.alwaysOn||[]).includes(v)).length)return true;
   }catch(e){return true} /* 判定できない時は安全側=入力中とみなす */
   return false;
 }
@@ -987,6 +987,10 @@ function needGuard(){
 function guardLeave(cb){
   if(needGuard()){
     askConfirm('区分を選んでいません。保存されていませんが、次の画面に行っていいですか?','移動する',cb);
+    return;
+  }
+  if(formDirty()){
+    askConfirm('編集内容は破棄されますが、よろしいですか?','破棄して移動',cb);
     return;
   }
   cb();
@@ -1058,9 +1062,9 @@ function fieldHTML(fd,vals){
       const val=v||today6();
       return wrap(`<input type="text" class="date6 num" id="f_${fd.k}" inputmode="numeric" maxlength="6" value="${escAttr(val)}">`);
     }
-    case 'person':return wrap(`<button class="personbtn ${v?'':'empty'}" id="f_${fd.k}" onclick="openPicker('f_${fd.k}','${fd.label}')">${esc(v||'タップして選択')}</button>`);
-    case 'ankenlink':return wrap(`<button class="personbtn ${v?'':'empty'}" id="f_${fd.k}" onclick="openAnkenPicker('${fd.k}')">${esc(v||'タップして選択(任意)')}</button>`);
-    case 'bukkenlink':return wrap(`<button class="personbtn ${v?'':'empty'}" id="f_${fd.k}" onclick="openBukkenPicker('${fd.k}')">${esc(v||'タップして選択(任意)')}</button>`);
+    case 'person':return wrap(`<button class="personbtn ${v?'':'empty'}" id="f_${fd.k}" onclick="openPicker('f_${fd.k}','${fd.label}')">${esc(v||'')}</button>`);
+    case 'ankenlink':return wrap(`<button class="personbtn ${v?'':'empty'}" id="f_${fd.k}" onclick="openAnkenPicker('${fd.k}')">${esc(v||'')}</button>`);
+    case 'bukkenlink':return wrap(`<button class="personbtn ${v?'':'empty'}" id="f_${fd.k}" onclick="openBukkenPicker('${fd.k}')">${esc(v||'')}</button>`);
     case 'date6o':return wrap(`<input type="text" class="date6 num" id="f_${fd.k}" inputmode="numeric" maxlength="6" placeholder="未入力" value="${escAttr(v||'')}">`);
     case 'time4':return wrap(`<input type="text" class="date6 num" id="f_${fd.k}" inputmode="numeric" maxlength="4" placeholder="例:1400" value="${escAttr(v||'')}">`);
     case 'md4':return wrap(`<input type="text" class="date6 num" id="f_${fd.k}" inputmode="numeric" maxlength="4" placeholder="例:0331" value="${escAttr(v||'')}">`);
@@ -1455,7 +1459,7 @@ function pickAnken(label){
   const e=document.getElementById('f_'+ankenTarget);
   if(e){
     if(label){e.textContent=label;e.classList.remove('empty')}
-    else{e.textContent='タップして選択(任意)';e.classList.add('empty')}
+    else{e.textContent='';e.classList.add('empty')}
   }
   closeAnkenPicker();
 }
@@ -1769,7 +1773,7 @@ function pickBukken(label){
   const e=document.getElementById('f_'+bukkenTarget);
   if(e){
     if(label){e.textContent=label;e.classList.remove('empty')}
-    else{e.textContent='タップして選択(任意)';e.classList.add('empty')}
+    else{e.textContent='';e.classList.add('empty')}
   }
   closeBukkenPicker();
 }
@@ -2218,6 +2222,15 @@ function escAttr(s){return esc(s).replace(/"/g,'&quot;')}
       askConfirm('区分を選んでいません。保存されていませんが、次の画面に行っていいですか?','移動する',()=>{bypass=true;sb.focus();});
     }
   });
+})();
+(function(){
+  const host=document.getElementById('fields');
+  if(host){
+    const isOne=t=>t&&t.classList&&t.classList.contains('oneline');
+    host.addEventListener('pointerdown',e=>{if(isOne(e.target))e.target.classList.add('expanded')},true);
+    host.addEventListener('input',e=>{if(isOne(e.target))e.target.classList.add('expanded')},true);
+    host.addEventListener('focusout',e=>{if(isOne(e.target))e.target.classList.remove('expanded')},true);
+  }
 })();
 document.getElementById('appVer').textContent=APP_VER;
 loadLocal();
