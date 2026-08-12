@@ -91,6 +91,9 @@ textarea.big{min-height:170px}
 .minrow .unit{font-size:.8rem;color:var(--sub);margin-right:4px}
 .minrow button{border:1px solid var(--line);background:#FCFCFB;border-radius:8px;padding:8px 10px;font-size:.85rem;cursor:pointer;font-family:inherit;color:var(--ink)}
 /* 省スペース型ステータス行(プルダウン+日付) */
+.seikyu-sum{padding:10px 14px;margin-bottom:10px;border:1px solid var(--line,#ddd);border-radius:10px;font-weight:700;background:rgba(176,137,69,.08)}
+.seikyu-sum .zan-red{color:#C0392B}
+.seikyu-sum .zan-ok{color:#1E8449}
 .statline{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
 .statline .sl{min-width:0}
 .statline label{display:block;font-size:.7rem;color:var(--sub);letter-spacing:.08em;margin-bottom:3px}
@@ -364,8 +367,8 @@ const PALETTE=['#3B6FB5','#7B5EA7','#5F7F5F','#9E5E8A','#A84A3B','#4E6E9E','#8A7
 
 /* =============== 同期レイヤー(GAS+スプレッドシート) =============== */
 const GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
-const APP_VER='v59';
-const LS_KEY='ql_key', LS_CACHE='ql_cache_v31', LS_OUTBOX='ql_outbox_v1';
+const APP_VER='v60';
+const LS_KEY='ql_key', LS_CACHE='ql_cache_v32', LS_OUTBOX='ql_outbox_v1';
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 let apiKey=lsGet(LS_KEY)||'';
@@ -380,7 +383,7 @@ function loadLocal(){
     let c=JSON.parse(lsGet(LS_CACHE)||'null');
     if(!c){
       /* 旧バージョンのキャッシュから記録・人物リストだけ引き継ぐ(タブ構成は新定義を使う) */
-      const old=JSON.parse(lsGet('ql_cache_v30')||lsGet('ql_cache_v29')||lsGet('ql_cache_v28')||lsGet('ql_cache_v27')||lsGet('ql_cache_v26')||lsGet('ql_cache_v25')||lsGet('ql_cache_v24')||lsGet('ql_cache_v23')||lsGet('ql_cache_v22')||lsGet('ql_cache_v21')||lsGet('ql_cache_v20')||lsGet('ql_cache_v19')||lsGet('ql_cache_v18')||lsGet('ql_cache_v17')||lsGet('ql_cache_v16')||lsGet('ql_cache_v15')||lsGet('ql_cache_v14')||lsGet('ql_cache_v13')||lsGet('ql_cache_v12')||lsGet('ql_cache_v11')||lsGet('ql_cache_v10')||lsGet('ql_cache_v9')||lsGet('ql_cache_v8')||lsGet('ql_cache_v7')||lsGet('ql_cache_v6')||lsGet('ql_cache_v5')||lsGet('ql_cache_v4')||lsGet('ql_cache_v3')||lsGet('ql_cache_v1')||'null');
+      const old=JSON.parse(lsGet('ql_cache_v31')||lsGet('ql_cache_v30')||lsGet('ql_cache_v29')||lsGet('ql_cache_v28')||lsGet('ql_cache_v27')||lsGet('ql_cache_v26')||lsGet('ql_cache_v25')||lsGet('ql_cache_v24')||lsGet('ql_cache_v23')||lsGet('ql_cache_v22')||lsGet('ql_cache_v21')||lsGet('ql_cache_v20')||lsGet('ql_cache_v19')||lsGet('ql_cache_v18')||lsGet('ql_cache_v17')||lsGet('ql_cache_v16')||lsGet('ql_cache_v15')||lsGet('ql_cache_v14')||lsGet('ql_cache_v13')||lsGet('ql_cache_v12')||lsGet('ql_cache_v11')||lsGet('ql_cache_v10')||lsGet('ql_cache_v9')||lsGet('ql_cache_v8')||lsGet('ql_cache_v7')||lsGet('ql_cache_v6')||lsGet('ql_cache_v5')||lsGet('ql_cache_v4')||lsGet('ql_cache_v3')||lsGet('ql_cache_v1')||'null');
       if(old)c={entries:old.entries,groups:old.groups,recentPeople:old.recentPeople};
     }
     if(c){
@@ -439,6 +442,33 @@ function migrate(){
       d.prio=({'A群':['緊急','重要'],'B群':['緊急'],'C群':['重要'],'D群':[]})[d.prio]||[];
     }
   });
+  /* v60: 請求タブのシンプルログ化(旧ステータス・請求日/入金日・金額(報酬)欄を発生日+金額2欄+備考へ統合) */
+  function seikyuV60Needed(d){return ('billStat' in d)||('payStat' in d)||('billDate' in d)||('payDate' in d)||('amount' in d)}
+  function seikyuV60Convert(d){
+    const has=v=>v!==''&&v!==undefined&&v!==null;
+    const bAmt=has(d.billAmt)?d.billAmt:'';
+    const pAmt=has(d.payAmt)?d.payAmt:'';
+    const bD=valid6(d.billDate||'')?d.billDate:'';
+    const pD=valid6(d.payDate||'')?d.payDate:'';
+    const notes=[];
+    if(has(d.amount)){const n=Number(d.amount);notes.push('【金額】'+(isNaN(n)?String(d.amount):n.toLocaleString('ja-JP'))+'円')}
+    if(d.billStat==='請求済み'&&bAmt===''&&!bD)notes.push('【旧: 請求済み】');
+    if(d.payStat==='入金済み'&&pAmt===''&&!pD)notes.push('【旧: 入金済み】');
+    const base={anken:(typeof d.anken==='string')?d.anken:'',doneKeys:Array.isArray(d.doneKeys)?d.doneKeys:[]};
+    if(d.srcAnken!==undefined)base.srcAnken=d.srcAnken;
+    if(bAmt!==''&&pAmt!==''&&bD&&pD&&bD!==pD){
+      const main=Object.assign({},base,{date:d.date||bD,billAmt:bAmt,payAmt:''});
+      if(bD&&main.date!==bD)notes.push('請求日: '+iso6(bD));
+      main.note=[d.note,...notes].filter(Boolean).join('\n');
+      const extra=Object.assign({},base,{date:pD,billAmt:'',payAmt:pAmt,note:'',doneKeys:[]});
+      return {main:main,extra:extra};
+    }
+    const main=Object.assign({},base,{date:d.date||bD||pD||'',billAmt:bAmt,payAmt:pAmt});
+    if(bD&&main.date!==bD)notes.push('請求日: '+iso6(bD));
+    if(pD&&main.date!==pD)notes.push('入金日: '+iso6(pD));
+    main.note=[d.note,...notes].filter(Boolean).join('\n');
+    return {main:main,extra:null};
+  }
   /* 案件に残っている請求・入金・金額データを、請求タブの記録として一度だけ引っ越す */
   const newSeikyu=[];
   entries.forEach(en=>{
@@ -455,6 +485,23 @@ function migrate(){
       srcAnken:en.id,note:'',doneKeys:[]}});
   });
   newSeikyu.forEach(x=>{entries.unshift(x);enqueue({action:'save',entry:x,cols:colsOf(x)},true)});
+  /* v60移行の実行: 全請求レコードを新形式へ。日付違いの請求+入金は2行に分割 */
+  const seikyuExtra=[];const seikyuEmpty=[];
+  entries.forEach(en=>{
+    if(en.cat!=='seikyu'||!en.data||!seikyuV60Needed(en.data))return;
+    const r=seikyuV60Convert(en.data);
+    en.data=r.main;
+    enqueue({action:'save',entry:en,cols:colsOf(en)},true);
+    if(r.extra)seikyuExtra.push({id:uid(),cat:'seikyu',ts:en.ts||Date.now(),data:r.extra});
+    if(!en.arch&&r.main.billAmt===''&&r.main.payAmt===''&&!r.main.note)seikyuEmpty.push(en);
+  });
+  seikyuExtra.forEach(x=>{entries.unshift(x);enqueue({action:'save',entry:x,cols:colsOf(x)},true)});
+  if(seikyuEmpty.length){
+    setTimeout(()=>{askConfirm('請求タブの整理で、金額もメモも入っていない空の請求記録が'+seikyuEmpty.length+'件見つかりました。まとめてアーカイブしますか?(データは消えません。「アーカイブ」フィルターでいつでも見られます)','アーカイブする',()=>{
+      seikyuEmpty.forEach(x=>{x.arch=1;enqueue({action:'save',entry:x,cols:colsOf(x)},true)});
+      saveLocal();flush();renderTimeline();toast(seikyuEmpty.length+'件をアーカイブしました');
+    })},800);
+  }
   /* 管理カルテの一本化: 旧形式は直接変換、業務別に分かれたカルテは顧客ごとに合体 */
   const BIZMAP={'会計':'会計','建設業許可':'建設','産廃業許可':'産廃','宅建業許可':'宅建','ビザ申請':'ビザ','法定後見':'後見','任意後見':'後見'};
   const MERGEK=['htype','kessan','sales1','sales2','sales3','capital','shares','est','kaigyo','aoiro','kazei','honsoku','kyoka','kyoka_no','sanpai','sanpai_no','takken','takken_no','takkenshi','zairyu','zexp','toritsugi','bday','souzoku','startd'];
@@ -610,7 +657,7 @@ let cfgTimer=null;
 function cfgSync(){
   clearTimeout(cfgTimer);
   cfgTimer=setTimeout(()=>{
-    enqueue({action:'config',name:'cats31',value:cats});
+    enqueue({action:'config',name:'cats32',value:cats});
     enqueue({action:'config',name:'groups',value:groups});
     enqueue({action:'config',name:'recent',value:recentPeople});
   },1200);
@@ -637,7 +684,7 @@ async function fetchAll(){
     sv.sort((a,b)=>(b.ts||0)-(a.ts||0));
     entries=sv;
     if(j.config){
-      if(Array.isArray(j.config.cats31)&&j.config.cats31.length)cats=j.config.cats31;
+      if(Array.isArray(j.config.cats32)&&j.config.cats32.length)cats=j.config.cats32;
       if(Array.isArray(j.config.groups)&&j.config.groups.length)groups=j.config.groups;
       if(Array.isArray(j.config.recent))recentPeople=j.config.recent;
     }
@@ -776,11 +823,10 @@ let cats=[
    {k:'kyodo',label:'共同でやる人(＋で複数追加できます)',type:'personlist',showIf:{k:'scope',v:'共同'}},
    {k:'delegate',label:'誰にお願いするか(＋で複数追加できます)',type:'personlist',showIf:{k:'scope',v:'範囲外'}}]},
  {id:'seikyu',name:'請求',color:'#B08945',text:'#fff',fields:[
-   {k:'date',label:'発生日',type:'date6'},
-   {k:'bill',label:'請求',type:'statline',sk:'billStat',options:['未請求','請求済み'],ak:'billAmt',alabel:'請求金額(円)',dk:'billDate',dlabel:'請求日',autoDate:true},
-   {k:'pay',label:'入金',type:'statline',sk:'payStat',options:['未入金','入金済み'],ak:'payAmt',alabel:'入金金額(円)',dk:'payDate',dlabel:'入金日',autoDate:true},
+   {k:'date',label:'発生日(空欄なら今日)',type:'date6'},
+   {k:'billAmt',label:'請求金額(円)',type:'amount'},
+   {k:'payAmt',label:'入金金額(円)',type:'amount'},
    {k:'anken',label:'案件に紐付け',type:'ankenlink'},
-   {k:'amount',label:'金額・報酬(円)',type:'amount'},
    {k:'note',label:'備考',type:'textarea',ph:'メモ(任意)'}]},
  {id:'bukken',name:'物件',color:'#CFE2F3',text:'#232A35',fields:[
    {k:'done',label:'完了',type:'statline',sk:'doneStat',options:['未完了','完了'],dk:'doneDate',dlabel:'完了日',autoDate:true,row:'h1'},
@@ -1361,6 +1407,7 @@ function saveEntry(){
     const prevE=editingId?entries.find(x=>String(x.id)===String(editingId)):null;
     applyDoneMeta(d,prevE?prevE.data:null);
   }
+  if(activeCat==='seikyu'&&!d.date)d.date=today6();
   const dateF=c.fields.find(f=>f.type==='date6');
   if(dateF&&d[dateF.k]&&!valid6(d[dateF.k])){toastErr('日付は6桁で入力してください(例:'+today6()+')');return}
   for(const fd of c.fields.filter(f=>f.type==='statline'&&f.dk)){
@@ -1898,6 +1945,20 @@ function entryValues(e){
   return vals;
 }
 let urgOn=false,impOn=false,showDone=false,ankenFilter='',archOn=false,holdOn=false,billOn=false,payOn=false;
+let seikyuAgg=null;
+function buildSeikyuAgg(){
+  const g={};const billedAnken=new Set();
+  entries.forEach(e=>{
+    if(e.cat!=='seikyu'||e.arch)return;
+    const d=e.data||{};
+    const key=(typeof d.anken==='string'&&d.anken)?('A:'+d.anken):('R:'+e.id);
+    if(!g[key])g[key]={bill:0,pay:0};
+    g[key].bill+=Number(d.billAmt)||0;
+    g[key].pay+=Number(d.payAmt)||0;
+    if((Number(d.billAmt)||0)>0&&typeof d.anken==='string'&&d.anken)billedAnken.add(d.anken);
+  });
+  seikyuAgg={g:g,billedAnken:billedAnken};
+}
 let listLimit=20,catFilter='';
 function searchInput(){listLimit=20;renderTimeline()}
 function toggleCat(id){catFilter=(catFilter===id)?'':id;listLimit=20;paintFilters();renderTimeline()}
@@ -1929,10 +1990,17 @@ function passFilters(e){
   }else{
     if(e.arch)return false;
     if(billOn||payOn){
-      /* 回収モード: 未請求/未入金の請求記録だけを表示 */
-      if(e.cat!=='seikyu')return false;
-      if(billOn&&(d.billStat||'未請求')!=='未請求')return false;
-      if(payOn&&(d.payStat||'未入金')!=='未入金')return false;
+      /* 回収モード(計算式): 未入金=案件単位で請求計>入金計の請求ログ / 未請求=完了済み案件で請求ログなし */
+      let hit=false;
+      if(payOn&&e.cat==='seikyu'){
+        const key=(typeof d.anken==='string'&&d.anken)?('A:'+d.anken):('R:'+e.id);
+        const sm=(seikyuAgg&&seikyuAgg.g[key])||{bill:0,pay:0};
+        if(sm.bill>sm.pay)hit=true;
+      }
+      if(!hit&&billOn&&e.cat==='anken'){
+        if(d.doneStat==='完了'&&!(seikyuAgg&&seikyuAgg.billedAnken.has(ankenLabel(e))))hit=true;
+      }
+      if(!hit)return false;
     }else if(ankenFilter){
       /* 案件フィルター中: その案件本体+紐づく記録を、完了も含めて全部表示 */
       const linked=(e.cat==='anken'&&ankenLabel(e)===ankenFilter)||(typeof d.anken==='string'&&d.anken===ankenFilter);
@@ -1992,6 +2060,10 @@ function summaryHTML(e){
     const sign=d.io==='収入'?'＋':(d.io==='支出'?'−':'');
     parts.push(`<span class="num ${cls}">${sign}${fmtAmt(d.amount)}</span>`);
   }
+  if(e.cat==='seikyu'){
+    if(d.billAmt!==''&&d.billAmt!==undefined&&d.billAmt!==null)parts.push(`<span class="num">請求 ${fmtAmt(d.billAmt)}</span>`);
+    if(d.payAmt!==''&&d.payAmt!==undefined&&d.payAmt!==null)parts.push(`<span class="num amt-in">入金 ${fmtAmt(d.payAmt)}</span>`);
+  }
   if(d.minutes)parts.push(`<span class="num">${fmtMin(d.minutes)}</span>`);
   if(d.seconds!==''&&d.seconds!==undefined&&d.seconds!==null&&d.seconds!==0)parts.push(`<span class="num">${d.seconds}秒</span>`);
   const mainF=fs.find(f=>f.main&&['text','textarea','bigtext'].includes(f.type));
@@ -2000,8 +2072,23 @@ function summaryHTML(e){
   return {badges,line:parts.join('　')};
 }
 function renderTimeline(){
+  buildSeikyuAgg();
   const q=document.getElementById('searchBox').value.trim();
   const el=document.getElementById('timeline');el.innerHTML='';
+  if(ankenFilter){
+    let sb=0,sp=0;
+    entries.forEach(x=>{
+      if(x.cat!=='seikyu'||x.arch)return;const xd=x.data||{};
+      if(xd.anken!==ankenFilter)return;
+      sb+=Number(xd.billAmt)||0;sp+=Number(xd.payAmt)||0;
+    });
+    if(sb||sp){
+      const zan=sb-sp;
+      const g=document.createElement('div');g.className='seikyu-sum';
+      g.innerHTML='請求計 ¥'+sb.toLocaleString('ja-JP')+'　入金計 ¥'+sp.toLocaleString('ja-JP')+'　<span class="'+(zan>0?'zan-red':'zan-ok')+'">差額 ¥'+zan.toLocaleString('ja-JP')+'</span>';
+      el.appendChild(g);
+    }
+  }
   const list=sortForList(entries.filter(passFilters).filter(e=>!q||matches(e,q)));
   if(!list.length){el.innerHTML='<div class="empty-timeline">表示できる記録がありません(完了分は「完了を含む」、保留分は「保留」で表示されます)</div>';renderBanner();renderKanriDash();return}
   const shown=list.slice(0,listLimit);
