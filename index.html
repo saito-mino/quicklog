@@ -84,6 +84,9 @@ textarea.big{min-height:170px}
 .selrow button.on.io-out{background:var(--danger);border-color:var(--danger)}
 .selrow button.on.prio-a{background:#E0AA00;border-color:#E0AA00;color:#232A35}
 .selrow button.on.prio-b{background:#7B5EA7;border-color:#7B5EA7}
+.selrow button.on.prio-c{background:#8A93A6;border-color:#8A93A6}
+.selrow button.on.mk-rec{background:#5F7F5F;border-color:#5F7F5F}
+.badge.brecipe{background:#E7F0D8;border-color:#9DBA7F;color:#232A35;font-weight:700}
 .selrow button.addopt{border:1px dashed var(--sub);background:none;color:var(--sub);padding:8px 12px}
 /* 時間ワンタップ */
 .minrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
@@ -130,6 +133,7 @@ textarea.big{min-height:170px}
 .badge.bgray{color:#fff;border-color:#8A93A6;background:#8A93A6;font-weight:700}
 .bpill.gray{background:#8A93A6}
 .badge.pa{color:#232A35;border-color:#E0AA00;background:#F2CE55;font-weight:700}
+.badge.tapx{cursor:pointer;padding:2px 10px}
 .badge.pb{color:#fff;border-color:#7B5EA7;background:#7B5EA7;font-weight:700}
 .rec .txt{font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block}
 .amt-in{color:var(--ok);font-weight:700}
@@ -224,8 +228,8 @@ textarea.big.oneline.expanded{height:240px;min-height:240px}
 .bpill.green{background:var(--ok)}
 .bpill.fy{background:#E0AA00;color:#232A35}
 .bpill.fp{background:#7B5EA7}
-.detail-actions{display:flex;gap:8px;margin-top:20px}
-.detail-actions button{flex:1;border:1px solid var(--line);background:#F6F7F5;border-radius:8px;padding:11px;font-size:.88rem;cursor:pointer;font-family:inherit;color:var(--ink)}
+.detail-actions{display:flex;gap:8px;margin-top:20px;flex-wrap:wrap}
+.detail-actions button{flex:1 1 40%;border:1px solid var(--line);background:#F6F7F5;border-radius:8px;padding:11px;font-size:.88rem;cursor:pointer;font-family:inherit;color:var(--ink)}
 .detail-actions button.danger{color:var(--danger);border-color:#E5C9C9}
 
 #toast{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#2E9E6B;color:#fff;padding:14px 26px;border-radius:14px;font-size:.92rem;opacity:0;pointer-events:none;transition:opacity .2s;z-index:100;max-width:92vw;text-align:center}
@@ -252,12 +256,12 @@ textarea.big.oneline.expanded{height:240px;min-height:240px}
   <div id="kanriDash" style="display:none"></div>
 
   <div class="toolbar">
-    <input type="text" id="searchBox" placeholder="キーワード検索(名前・内容・種別・ステータス等)" oninput="searchInput()">
+    <input type="text" id="searchBox" placeholder="キーワード検索(全タブから探します)" oninput="searchInput()">
     <button class="copyall" onclick="copyAll()">全件コピー</button>
   </div>
   <div class="filterrow">
     <button class="fbtn" id="fb_urg" onclick="toggleUrg()">緊急</button>
-    <button class="fbtn" id="fb_imp" onclick="toggleImp()">重要</button>
+    <button class="fbtn" id="fb_imp" onclick="toggleImp()">不急</button>
     <button class="fbtn" id="fb_done" onclick="toggleDone()">完了を含む</button>
     <button class="fbtn" id="fb_hold" onclick="toggleHold()">保留</button>
     <button class="fbtn" id="fb_arch" onclick="toggleArch()">アーカイブ</button>
@@ -325,8 +329,8 @@ textarea.big.oneline.expanded{height:240px;min-height:240px}
 <!-- 案件ピッカー -->
 <div class="overlay" id="ankenOverlay" onclick="if(event.target===this)closeAnkenPicker()">
   <div class="sheet">
-    <h3><span>案件を選択</span><button class="closebtn" onclick="closeAnkenPicker()">×</button></h3>
-    <div class="paddrow" style="margin-bottom:8px"><button style="flex:1" onclick="pickAnken('')">紐づけを解除(なし)</button></div>
+    <h3><span id="ankenPickTitle">案件を選択</span><button class="closebtn" onclick="closeAnkenPicker()">×</button></h3>
+    <div class="paddrow" id="ankenClearRow" style="margin-bottom:8px"><button style="flex:1" onclick="pickAnken('')">紐づけを解除(なし)</button></div>
     <input type="text" id="ankenSearch" placeholder="案件を検索" oninput="renderAnkenList()" style="margin-bottom:8px">
     <div style="margin-bottom:10px"><button class="fbtn" id="fb_ankendone" onclick="toggleAnkenDone()">完了した案件を含む</button></div>
     <div class="plist" id="ankenList"></div>
@@ -367,13 +371,22 @@ const PALETTE=['#3B6FB5','#7B5EA7','#5F7F5F','#9E5E8A','#A84A3B','#4E6E9E','#8A7
 
 /* =============== 同期レイヤー(GAS+スプレッドシート) =============== */
 const GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
-const APP_VER='v60';
+const APP_VER='v64';
 const LS_KEY='ql_key', LS_CACHE='ql_cache_v32', LS_OUTBOX='ql_outbox_v1';
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 let apiKey=lsGet(LS_KEY)||'';
 let outbox=[];try{outbox=JSON.parse(lsGet(LS_OUTBOX)||'[]')||[]}catch(e){outbox=[]}
 function uid(){return 'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+/* ---- 通し番号(v64)。番号は指紋であって分類ではない: 一度振ったら統合・タブ移動でも不変、再利用しない ---- */
+const NO_PREFIX={task:'T',kanri:'K',jikan:'J',shukan:'S',pf:'M',shushi:'F',anken:'A',bukken:'B',neta:'N',hiyari:'H',genkin:'Z'};
+function parseNo(s){const m=/^([A-Z])-(\d+)$/.exec(String(s||''));return m?{p:m[1],n:+m[2]}:null}
+function issueNo(cat){
+  const p=NO_PREFIX[cat];if(!p)return'';
+  let mx=0;
+  entries.forEach(en=>{const m=parseNo(en.no);if(m&&m.p===p&&m.n>mx)mx=m.n});
+  return p+'-'+(mx+1);
+}
 function saveLocal(){
   lsSet(LS_CACHE,JSON.stringify({entries:entries,cats:cats,groups:groups,recentPeople:recentPeople}));
   lsSet(LS_OUTBOX,JSON.stringify(outbox));
@@ -388,7 +401,7 @@ function loadLocal(){
     }
     if(c){
       if(Array.isArray(c.entries))entries=c.entries;
-      if(Array.isArray(c.cats)&&c.cats.length)cats=c.cats;
+      /* v62: タブ・入力欄の定義(cats)は常にコード側の最新を使う(保存値で上書きすると新機能の欄が出ない) */
       if(Array.isArray(c.groups)&&c.groups.length)groups=c.groups;
       if(Array.isArray(c.recentPeople))recentPeople=c.recentPeople;
     }
@@ -420,6 +433,11 @@ function migrate(){
       }
     }
     if(en.cat==='orei')en.cat='pf'; /* 御恩タブ廃止: 既存記録はメモへ */
+    if(en.cat==='recipe'){en.cat='pf';en.data=en.data||{};if(!en.data.money)en.data.money='レシピ'} /* v63: レシピタブ廃止→レシピマーク付きメモへ */
+    if(en.cat==='pf'&&en.data){
+      if(en.data.money==='請求')en.data.money='請求済み';
+      if(en.data.money==='入金')en.data.money='入金済み';
+    }
     if(en.cat==='shukan'&&en.data){
       if(en.data.kind==='DASH')en.data.kind='ダッシュ';
       if(en.data.kind==='積み立て')en.data.kind='積立';
@@ -440,6 +458,10 @@ function migrate(){
     /* 旧A〜D区分を緊急・重要フラグへ変換 */
     if(typeof d.prio==='string'){
       d.prio=({'A群':['緊急','重要'],'B群':['緊急'],'C群':['重要'],'D群':[]})[d.prio]||[];
+    }
+    /* v61: 区分を「緊急」「不急」の2択へ(重要・なしは不急に統合) */
+    if(Array.isArray(d.prio)&&d.prio.length&&!(d.prio.length===1&&(d.prio[0]==='緊急'||d.prio[0]==='不急'))){
+      d.prio=d.prio.includes('緊急')?['緊急']:['不急'];
     }
   });
   /* v60: 請求タブのシンプルログ化(旧ステータス・請求日/入金日・金額(報酬)欄を発生日+金額2欄+備考へ統合) */
@@ -549,6 +571,24 @@ function migrate(){
     delete md.biz;delete md.srcKanri;delete md.kaishi;delete md.keiyakubi;
     enqueue({action:'save',entry:main,cols:colsOf(main)},true);
   });
+  /* v64: 通し番号の付与。未採番の記録に作成順(ts昇順)で振る。重複番号は新しい方だけ振り直して修復 */
+  const maxNo={},seenNo={};
+  entries.forEach(en=>{const m=parseNo(en.no);if(m&&(!maxNo[m.p]||m.n>maxNo[m.p]))maxNo[m.p]=m.n});
+  entries.slice().sort((a,b)=>(a.ts||0)-(b.ts||0)).forEach(en=>{
+    const m=parseNo(en.no);
+    if(m){
+      if(seenNo[en.no]){
+        maxNo[m.p]=(maxNo[m.p]||0)+1;
+        en.no=m.p+'-'+maxNo[m.p];seenNo[en.no]=1;
+        enqueue({action:'save',entry:en,cols:colsOf(en)},true);
+      }else seenNo[en.no]=1;
+      return;
+    }
+    const p=NO_PREFIX[en.cat];if(!p)return;
+    maxNo[p]=(maxNo[p]||0)+1;
+    en.no=p+'-'+maxNo[p];seenNo[en.no]=1;
+    enqueue({action:'save',entry:en,cols:colsOf(en)},true);
+  });
 }
 function updStat(msg){
   const el=document.getElementById('syncStat');if(!el)return;
@@ -649,6 +689,11 @@ function colsOf(e){
   if(d.manualDone)others.push('手動完了日: '+d.manualDone);
   if(d.durMin)others.push('所要: '+d.durMin+'分');
   if(e.arch)others.push('アーカイブ済み');
+  if(e.cat==='pf'&&d.money){
+    if(d.money==='レシピ'){if(!c.kind)c.kind='レシピ'}
+    else{c.bill=d.money;if(c.amount==='')c.amount=pfMoneyAmt(d)||''}
+  }
+  if(e.no)others.unshift('No: '+e.no);
   c.other=others.join(' / ');
   return c;
 }
@@ -657,7 +702,6 @@ let cfgTimer=null;
 function cfgSync(){
   clearTimeout(cfgTimer);
   cfgTimer=setTimeout(()=>{
-    enqueue({action:'config',name:'cats32',value:cats});
     enqueue({action:'config',name:'groups',value:groups});
     enqueue({action:'config',name:'recent',value:recentPeople});
   },1200);
@@ -684,7 +728,7 @@ async function fetchAll(){
     sv.sort((a,b)=>(b.ts||0)-(a.ts||0));
     entries=sv;
     if(j.config){
-      if(Array.isArray(j.config.cats32)&&j.config.cats32.length)cats=j.config.cats32;
+      /* v62: cats32(タブ定義の保存値)は読まない。定義は常にコード側の最新を使う */
       if(Array.isArray(j.config.groups)&&j.config.groups.length)groups=j.config.groups;
       if(Array.isArray(j.config.recent))recentPeople=j.config.recent;
     }
@@ -744,7 +788,7 @@ let cats=[
  {id:'task',name:'タスク',color:'#2C4A73',text:'#fff',fields:[
    {k:'date',label:'発生日',type:'date6',row:'h1'},
    {k:'done',label:'完了',type:'statline',sk:'doneStat',options:['未完了','保留','完了'],okv:'完了',dk:'doneDate',dlabel:'完了日',autoDate:true,row:'h1'},
-   {k:'prio',label:'区分(必須)',type:'flags',required:true,options:['緊急','重要','なし'],cls:{'緊急':'prio-a','重要':'prio-b'}},
+   {k:'prio',label:'区分(必須)',type:'flags',required:true,single:true,options:['緊急','不急'],cls:{'緊急':'prio-a','不急':'prio-c'}},
    {k:'partner',label:'相手方',type:'person',row:'p'},
    {k:'anken',label:'案件(任意)',type:'ankenlink',row:'p'},
    {k:'bukkenref',label:'物件(任意)',type:'bukkenlink',row:'p'},
@@ -778,6 +822,7 @@ let cats=[
    {k:'startd',label:'契約日・審判日(任意)',type:'text',ph:'例:2024-05-01',showIf:{k:'bizs',v:'後見'}},
    {k:'bday',label:'誕生日(8桁 年月日・例19850506)',type:'ymd8',showIf:{k:'bizs',v:'後見'}},
    {k:'souzoku',label:'相続・家族の状況',type:'textarea',ph:'家族構成・相続の懸念・後見の経緯など(任意)',showIf:{k:'bizs',v:'後見'}},
+   {k:'dl',label:'手動期限(自動計算にない期限を自分で追加。毎年ものは「毎年」をオン)',type:'deadlist'},
    {k:'note',label:'備考',type:'textarea',ph:'メモ(任意)'}]},
  {id:'jikan',name:'時間',color:'#5C4326',text:'#fff',fields:[
    {k:'date',label:'日付',type:'date6'},
@@ -789,7 +834,7 @@ let cats=[
    {k:'minutes',label:'所要時間(自動計算・直接入力も可)',type:'minutes'}]},
  {id:'shukan',name:'習慣',color:'#4A3A6B',text:'#fff',fields:[
    {k:'date',label:'日付',type:'date6'},
-   {k:'kind',label:'種類',type:'select',options:['ダッシュ','節約','筋トレ','ストレッチ','減塩','階段','積立','片付け']},
+   {k:'kind',label:'種類',type:'select',options:['ダッシュ','節約','筋トレ','ストレッチ','減塩','階段','積立','片付け','御恩']},
    {k:'seconds',label:'秒数',type:'seconds',showIf:{k:'kind',vs:['ダッシュ','筋トレ','ストレッチ']}},
    {k:'amount',label:'節約額(円)',type:'amount',showIf:{k:'kind',v:'節約'}},
    {k:'genen',label:'塩を振る回数を減らした',type:'unitnum',unit:'回',showIf:{k:'kind',v:'減塩'}},
@@ -797,12 +842,14 @@ let cats=[
    {k:'tsumiWhat',label:'何を積み立てたか(目標:インデックスファンド 月3万)',type:'text',ph:'例:インデックスファンド',showIf:{k:'kind',v:'積立'}},
    {k:'tsumiAmt',label:'積立額(円)',type:'amount',showIf:{k:'kind',v:'積立'}},
    {k:'pieces',label:'片付けた個数',type:'unitnum',unit:'個',showIf:{k:'kind',v:'片付け'}},
+   {k:'onjin',label:'誰から(任意)',type:'person',showIf:{k:'kind',v:'御恩'}},
    {k:'content',label:'内容',type:'textarea',ph:'メモ(任意)',main:1}]},
  {id:'pf',name:'メモ',color:'#3F4A54',text:'#fff',fields:[
    {k:'date',label:'日付',type:'date6'},
    {k:'partner',label:'相手方に紐づけ(任意)',type:'person'},
    {k:'anken',label:'案件に紐づけ(任意)',type:'ankenlink'},
    {k:'bukkenref',label:'物件に紐づけ(任意)',type:'bukkenlink'},
+   {k:'money',label:'マーク(任意)',type:'select',optional:true,options:['請求済み','入金済み','レシピ'],cls:{'請求済み':'io-out','入金済み':'io-in','レシピ':'mk-rec'},hint:'請求済み・入金済みは内容の金額(「55,000円」等)を自動で読み取ります'},
    {k:'content',label:'内容',type:'bigtext',ph:'メモ・気づきを自由に',main:1}]},
  {id:'shushi',name:'収支',color:'#1F5C40',text:'#fff',fields:[
    {k:'date',label:'日付',type:'date6'},
@@ -815,7 +862,7 @@ let cats=[
    {k:'partner',label:'相手方',type:'person'},
    {k:'content',label:'内容',type:'textarea',ph:'受けた仕事の内容を手短に',main:1},
    {k:'note',label:'備考',type:'textarea',ph:'考慮すべきこと・気になる点など(任意)'},
-   {k:'prio',label:'区分(必須)',type:'flags',required:true,options:['緊急','重要','なし'],cls:{'緊急':'prio-a','重要':'prio-b'}},
+   {k:'prio',label:'区分(必須)',type:'flags',required:true,single:true,options:['緊急','不急'],cls:{'緊急':'prio-a','不急':'prio-c'}},
    {k:'engage',label:'スポット / 継続',type:'select',options:['スポット','継続'],hint:'スポット=高く厳しく / 継続=緩く安く'},
    {k:'source',label:'紹介 / 直接',type:'select',options:['紹介','直接']},
    {k:'introducers',label:'紹介者(＋で複数追加できます)',type:'personlist',showIf:{k:'source',v:'紹介'}},
@@ -853,10 +900,6 @@ let cats=[
    {k:'anken',label:'案件に紐づけ(任意)',type:'ankenlink'},
    {k:'bukkenref',label:'物件に紐づけ(任意)',type:'bukkenlink'},
    {k:'content',label:'内容(ヒヤリの中身と対策をまとめて)',type:'bigtext',ph:'例:期限を1日勘違い。対策:受任した瞬間にカルテ登録',main:1}]},
- {id:'recipe',name:'レシピ',color:'#E7F0D8',text:'#232A35',fields:[
-   {k:'date',label:'発生日',type:'date6'},
-   {k:'partner',label:'相手方(任意)',type:'person'},
-   {k:'content',label:'内容',type:'bigtext',ph:'レシピ・手順・やり方を書く',main:1}]},
  {id:'houjin',name:'法人',color:'#D6EBDC',text:'#232A35',fields:[
    {k:'partner',label:'顧客名(法人)',type:'person'},
    {k:'sales1',label:'売上:2期前(円)',type:'amount',row:'s'},
@@ -1035,15 +1078,52 @@ function needGuard(){
   return false;
 }
 function guardLeave(cb){
+  const go=()=>{clearDraft();cb()}; /* 破棄を選んだら下書きも消す */
   if(needGuard()){
-    askConfirm('区分を選んでいません。保存されていませんが、次の画面に行っていいですか?','移動する',cb);
+    askConfirm('区分を選んでいません。保存されていませんが、次の画面に行っていいですか?','移動する',go);
     return;
   }
   if(formDirty()){
-    askConfirm('編集内容は破棄されますが、よろしいですか?','破棄して移動',cb);
+    askConfirm('編集内容は破棄されますが、よろしいですか?','破棄して移動',go);
     return;
   }
   cb();
+}
+
+/* ---- 入力途中の自動下書き(スマホの強制再読み込みで入力が消える対策) ---- */
+const LS_DRAFT='ql_draft_v1';
+let draftTimer=null;
+function saveDraft(){
+  clearTimeout(draftTimer);
+  draftTimer=setTimeout(()=>{
+    try{
+      const c=catOf(activeCat);if(!c)return;
+      const d=readFields();
+      if(editingId||hasBodyOf(c,d)){
+        if(durState)d.durMin=durState;
+        lsSet(LS_DRAFT,JSON.stringify({cat:activeCat,editingId:editingId,data:d,ts:Date.now()}));
+      }else{
+        lsSet(LS_DRAFT,'');
+      }
+    }catch(e){}
+  },400);
+}
+function clearDraft(){clearTimeout(draftTimer);draftTimer=null;lsSet(LS_DRAFT,'')}
+function restoreDraft(){
+  try{
+    const dr=JSON.parse(lsGet(LS_DRAFT)||'null');
+    if(!dr||!dr.data)return false;
+    if(Date.now()-(dr.ts||0)>86400000){lsSet(LS_DRAFT,'');return false} /* 1日経った下書きは捨てる */
+    const c=cats.find(x=>x.id===dr.cat);if(!c)return false;
+    if(dr.editingId&&!entries.some(x=>String(x.id)===String(dr.editingId)))dr.editingId=null;
+    if(!dr.editingId&&!hasBodyOf(c,dr.data))return false;
+    activeCat=dr.cat;
+    editingId=dr.editingId||null;
+    renderTabs();
+    renderFields(dr.data);
+    setTimeout(()=>toast('入力途中だった内容を復元しました'),500);
+    return true;
+  }catch(e){return false}
 }
 
 /* ============== 入力欄(部品レンダラー) ============== */
@@ -1290,13 +1370,15 @@ function setSel(k,v){
   if(fd&&fd.optional&&selState[k]===v){selState[k]=''}else{selState[k]=v}
   paintSelect(fd);applyShowIf();applyBigIf();
 }
-const FLAG_ORDER={'緊急':1,'重要':2,'なし':3,'基本':10,'会計':11,'建設':12,'産廃':13,'宅建':14,'ビザ':15,'後見':16};
+const FLAG_ORDER={'緊急':1,'不急':2,'重要':3,'なし':4,'基本':10,'会計':11,'建設':12,'産廃':13,'宅建':14,'ビザ':15,'後見':16};
 function sortFlags(arr){return arr.sort((a,b)=>(FLAG_ORDER[a]||9)-(FLAG_ORDER[b]||9))}
 function setFlag(k,v){
   const fd=catOf(activeCat).fields.find(x=>x.k===k);if(!fd)return;
   if((fd.alwaysOn||[]).includes(v))return; /* 常時オンのボタンはオフにできない */
   let arr=(selState[k]||[]).slice();
-  if(v==='なし'){
+  if(fd.single){
+    arr=arr.includes(v)?[]:[v]; /* 二者択一(緊急/不急など) */
+  }else if(v==='なし'){
     arr=arr.includes('なし')?[]:['なし'];
   }else{
     arr=arr.filter(x=>x!=='なし');
@@ -1408,6 +1490,7 @@ function saveEntry(){
     applyDoneMeta(d,prevE?prevE.data:null);
   }
   if(activeCat==='seikyu'&&!d.date)d.date=today6();
+  if(activeCat==='pf'&&(d.money==='請求済み'||d.money==='入金済み')&&!pfMoneyAmt(d)){toastErr('金額が読み取れません。内容に「55,000円」「5万5000円」のように円まで書いてください');return}
   const dateF=c.fields.find(f=>f.type==='date6');
   if(dateF&&d[dateF.k]&&!valid6(d[dateF.k])){toastErr('日付は6桁で入力してください(例:'+today6()+')');return}
   for(const fd of c.fields.filter(f=>f.type==='statline'&&f.dk)){
@@ -1433,7 +1516,7 @@ function saveEntry(){
     }
   }
   for(const fd of c.fields.filter(f=>f.type==='flags'&&f.required)){
-    if(!((d[fd.k]||[]).length)){toastErr('区分を選んでください(緊急・重要・なし)');return}
+    if(!((d[fd.k]||[]).length)){toastErr('区分を選んでください(緊急・不急)');return}
   }
   if(!hasBodyOf(c,d)){toastErr('内容を入れてください');return}
   Object.keys(d).forEach(k=>{
@@ -1450,11 +1533,13 @@ function saveEntry(){
     editingId=null;toast('上書き保存しました');
   }else{
     rec={id:uid(),cat:activeCat,ts:Date.now(),data:d};
+    const no=issueNo(activeCat);if(no)rec.no=no;
     entries.unshift(rec);
-    toast('保存しました');
+    toast(no?('保存しました('+no+')'):'保存しました');
   }
   saveLocal();
   pushEntryOp(rec);
+  clearDraft();
   renderFields();renderTimeline();
 }
 
@@ -1464,6 +1549,21 @@ function ankenLabel(en){
   const d=en.data||{};
   const head=String(d.content||'').split('\n')[0];
   return ((d.partner?d.partner+'｜':'')+head).slice(0,40)||'(内容なし)';
+}
+/* 案件の紐づけ状況(件数と最終更新)。まとめ先の判断材料に使う */
+function ankenLinkInfo(label){
+  let n=0,last=0;
+  entries.forEach(e=>{
+    if(e.arch)return;
+    const d=e.data||{};
+    if(typeof d.anken==='string'&&d.anken===label){n++;if((e.ts||0)>last)last=e.ts||0}
+  });
+  return {n:n,last:last};
+}
+function tsDate(ts){
+  if(!ts)return'';
+  const t=new Date(ts);if(isNaN(t))return'';
+  return String(t.getFullYear()).slice(2)+'/'+pad2(t.getMonth()+1)+'/'+pad2(t.getDate());
 }
 let ankenShowDone=false;
 function toggleAnkenDone(){
@@ -1478,6 +1578,8 @@ function openAnkenPicker(fieldK){
   const b=document.getElementById('fb_ankendone');
   if(b)b.className='fbtn';
   document.getElementById('ankenSearch').value='';
+  document.getElementById('ankenPickTitle').textContent=(fieldK==='__merge__')?'まとめ先の案件を選択':'案件を選択';
+  document.getElementById('ankenClearRow').style.display=(fieldK==='__merge__')?'none':'flex';
   renderAnkenList();
   document.getElementById('ankenOverlay').classList.add('open');
 }
@@ -1489,13 +1591,18 @@ function renderAnkenList(){
   const q=document.getElementById('ankenSearch').value.trim();
   const el=document.getElementById('ankenList');el.innerHTML='';
   const list=entries.filter(e=>e.cat==='anken'&&!e.arch)
+    .filter(e=>ankenTarget!=='__merge__'||String(e.id)!==String(mergeSrcId))
     .filter(e=>ankenShowDone||(e.data||{}).doneStat!=='完了')
     .filter(e=>!q||ankenLabel(e).includes(q)||entryValues(e).join(' ').includes(q));
   if(!list.length){el.innerHTML='<div style="color:var(--sub);font-size:.85rem;padding:14px 4px">該当する案件がありません(完了済みは「完了した案件を含む」で表示されます)。</div>'}
   list.forEach(e=>{
     const b=document.createElement('button');
-    b.textContent=ankenLabel(e);
-    b.onclick=()=>pickAnken(ankenLabel(e));
+    const lbl=ankenLabel(e);
+    const info=ankenLinkInfo(lbl);
+    const own=(e.data||{}).date;
+    const meta=[e.no||'',own?'発生 '+fmt6(own):'','紐づけ'+info.n+'件',info.last?'最終 '+tsDate(info.last):''].filter(Boolean).join('・');
+    b.innerHTML=esc(lbl)+'<br><span style="font-size:.74rem;color:var(--sub)">'+esc(meta)+'</span>';
+    b.onclick=()=>pickAnken(lbl);
     el.appendChild(b);
   });
 }
@@ -1507,12 +1614,69 @@ function pickAnken(label){
     closeAnkenPicker();
     return;
   }
+  if(ankenTarget==='__merge__'){
+    closeAnkenPicker();
+    if(!label)return;
+    const srcId=mergeSrcId,srcLabel=mergeSrcLabel;
+    const src=entries.find(x=>String(x.id)===String(srcId));
+    const si=ankenLinkInfo(srcLabel),di=ankenLinkInfo(label);
+    const sd=(src&&src.data&&src.data.date)?fmt6(src.data.date):'';
+    const same=(srcLabel===label);
+    const dest=entries.find(x=>x.cat==='anken'&&!x.arch&&String(x.id)!==String(srcId)&&ankenLabel(x)===label);
+    const srcMeta=[(src&&src.no)||'',sd?'発生 '+sd:'','紐づけ'+si.n+'件'].filter(Boolean).join('・');
+    const destMeta=[(dest&&dest.no)||'','紐づけ'+di.n+'件'].filter(Boolean).join('・');
+    const after=same
+      ?'まとめ後: 紐づけ'+si.n+'件のまま(同名のため共通)。一覧のダブりが消えます'
+      :'まとめ後: 「'+label+'」に紐づけ'+(si.n+di.n)+'件が集まります';
+    askConfirm('まとめ元: 「'+srcLabel+'」('+srcMeta+')\n　↓ 紐づけ・金額の記録がすべて移ります\nまとめ先: 「'+label+'」('+destMeta+')\n\n'+after+'。まとめ元の内容・備考はアーカイブで見られます(番号は変わりません)','まとめる',()=>doMergeAnken(srcId,label));
+    return;
+  }
   const e=document.getElementById('f_'+ankenTarget);
   if(e){
     if(label){e.textContent=label;e.classList.remove('empty')}
     else{e.textContent='';e.classList.add('empty')}
   }
+  saveDraft();
   closeAnkenPicker();
+}
+
+/* ============== 案件まとめ(重複案件の統合) ============== */
+let mergeSrcId=null,mergeSrcLabel='';
+function mergeAnkenStart(){
+  const src=entries.find(x=>String(x.id)===String(detailId));
+  if(!src||src.cat!=='anken')return;
+  mergeSrcId=src.id;mergeSrcLabel=ankenLabel(src);
+  closeDetail();
+  openAnkenPicker('__merge__');
+}
+function doMergeAnken(srcId,destLabel){
+  const src=entries.find(x=>String(x.id)===String(srcId));
+  if(!src)return;
+  const srcLabel=ankenLabel(src);
+  let n=0;
+  /* 同名の重複案件は紐づけがすでに共通なので、付け替えは名前が違う時だけ行う */
+  if(srcLabel!==destLabel){
+    entries.forEach(en=>{
+      if(String(en.id)===String(srcId))return;
+      const d=en.data;if(!d)return;
+      if(typeof d.anken==='string'&&d.anken===srcLabel){
+        d.anken=destLabel;n++;
+        enqueue({action:'save',entry:en,cols:colsOf(en)},true);
+      }
+    });
+  }
+  const dest=entries.find(x=>x.cat==='anken'&&!x.arch&&String(x.id)!==String(srcId)&&ankenLabel(x)===destLabel);
+  src.arch=1;
+  src.data.mergedInto=destLabel;
+  if(dest&&dest.no)src.data.mergedIntoNo=dest.no;
+  enqueue({action:'save',entry:src,cols:colsOf(src)},true);
+  if(ankenFilter===srcLabel){ankenFilter=destLabel;paintFilters()}
+  saveLocal();flush();
+  renderTimeline();
+  const sN=src.no?src.no+' ':'',dN=(dest&&dest.no)?dest.no+' ':'';
+  toast(srcLabel===destLabel
+    ?'同名の重複案件をまとめました('+sN+'をアーカイブ、'+dN+'が残ります。紐づけは共通のためそのままです)'
+    :sN+'「'+srcLabel+'」を'+dN+'「'+destLabel+'」にまとめました(紐づく記録'+n+'件を付け替え)');
 }
 
 /* ============== 期限管理(管理タブ)エンジン ============== */
@@ -1741,10 +1905,11 @@ function kdDone(id,key,label){
     if(!e.data.doneKeys.includes(key))e.data.doneKeys.push(key);
     /* 履歴: 完了済みタスクとして下の一覧に残す */
     const dkey=String(key).split('@')[1]||'';
-    const log={id:uid(),cat:'task',ts:Date.now(),data:{
+    const logNo=issueNo('task');
+    const log={id:uid(),no:logNo,cat:'task',ts:Date.now(),data:{
       date:today6(),doneStat:'完了',doneDate:today6(),doneAt:nowStamp(),
       partner:(e.data&&e.data.partner)||'',
-      prio:[],
+      prio:['不急'],
       content:'【期限対応】'+((e.data&&e.data.partner)||'')+' '+label+(dkey?'('+dkey+'分)':''),
       kdKey:key,doneKeys:[]}};
     entries.unshift(log);
@@ -1826,6 +1991,7 @@ function pickBukken(label){
     if(label){e.textContent=label;e.classList.remove('empty')}
     else{e.textContent='';e.classList.add('empty')}
   }
+  saveDraft();
   closeBukkenPicker();
 }
 
@@ -1849,12 +2015,12 @@ function pickPerson(name){
   if(pickerListK){
     if(!plState[pickerListK].includes(name))plState[pickerListK].push(name);
     renderPL(pickerListK);
-    pushRecent(name);closePicker();
+    pushRecent(name);saveDraft();closePicker();
     return;
   }
   const e=document.getElementById(pickerTarget);
   e.textContent=name;e.classList.remove('empty');
-  pushRecent(name);closePicker();
+  pushRecent(name);saveDraft();closePicker();
 }
 function pushRecent(name){recentPeople=[name,...recentPeople.filter(p=>p!==name)].slice(0,6);cfgSync()}
 function renderRecent(){
@@ -1946,16 +2112,37 @@ function entryValues(e){
 }
 let urgOn=false,impOn=false,showDone=false,ankenFilter='',archOn=false,holdOn=false,billOn=false,payOn=false;
 let seikyuAgg=null;
+/* メモの内容欄から金額を読み取る(「55,000円」「5万円」「5万5000円」等。最初に見つかった金額を使う) */
+function pfMoneyAmt(d){
+  if(!d||!d.money)return 0;
+  const t=String(d.content||'');
+  let m=t.match(/(\d+(?:\.\d+)?)\s*万\s*([0-9][0-9,]*)?\s*円/);
+  if(m)return Math.round(parseFloat(m[1])*10000)+(m[2]?(parseInt(m[2].replace(/,/g,''),10)||0):0);
+  m=t.match(/([0-9][0-9,]*)\s*円/);
+  if(m)return parseInt(m[1].replace(/,/g,''),10)||0;
+  return 0;
+}
+/* 請求・入金の集計対象: 請求タブの記録+お金の記録つきメモ */
+function moneyOf(e){
+  const d=e.data||{};
+  if(e.cat==='seikyu')return {bill:Number(d.billAmt)||0,pay:Number(d.payAmt)||0};
+  if(e.cat==='pf'&&(d.money==='請求済み'||d.money==='入金済み')){
+    const a=pfMoneyAmt(d);
+    return d.money==='請求済み'?{bill:a,pay:0}:{bill:0,pay:a};
+  }
+  return null;
+}
 function buildSeikyuAgg(){
   const g={};const billedAnken=new Set();
   entries.forEach(e=>{
-    if(e.cat!=='seikyu'||e.arch)return;
+    if(e.arch)return;
+    const mo=moneyOf(e);if(!mo)return;
     const d=e.data||{};
     const key=(typeof d.anken==='string'&&d.anken)?('A:'+d.anken):('R:'+e.id);
     if(!g[key])g[key]={bill:0,pay:0};
-    g[key].bill+=Number(d.billAmt)||0;
-    g[key].pay+=Number(d.payAmt)||0;
-    if((Number(d.billAmt)||0)>0&&typeof d.anken==='string'&&d.anken)billedAnken.add(d.anken);
+    g[key].bill+=mo.bill;
+    g[key].pay+=mo.pay;
+    if(mo.bill>0&&typeof d.anken==='string'&&d.anken)billedAnken.add(d.anken);
   });
   seikyuAgg={g:g,billedAnken:billedAnken};
 }
@@ -1990,9 +2177,9 @@ function passFilters(e){
   }else{
     if(e.arch)return false;
     if(billOn||payOn){
-      /* 回収モード(計算式): 未入金=案件単位で請求計>入金計の請求ログ / 未請求=完了済み案件で請求ログなし */
+      /* 回収モード(計算式): 未入金=案件単位で請求計>入金計の請求ログ・お金メモ / 未請求=完了済み案件で請求記録なし */
       let hit=false;
-      if(payOn&&e.cat==='seikyu'){
+      if(payOn&&moneyOf(e)){
         const key=(typeof d.anken==='string'&&d.anken)?('A:'+d.anken):('R:'+e.id);
         const sm=(seikyuAgg&&seikyuAgg.g[key])||{bill:0,pay:0};
         if(sm.bill>sm.pay)hit=true;
@@ -2015,7 +2202,7 @@ function passFilters(e){
   }
   const p=Array.isArray(d.prio)?d.prio:[];
   if(urgOn&&!p.includes('緊急'))return false;
-  if(impOn&&!p.includes('重要'))return false;
+  if(impOn&&!p.includes('不急'))return false;
   return true;
 }
 const CAT_ORDER={task:1,kanri:2,jikan:3,shukan:4,pf:5,shushi:6,anken:7,seikyu:7.5,bukken:8,neta:9,hiyari:9.5,recipe:10,houjin:11,kojin:12,genkin:13};
@@ -2026,8 +2213,12 @@ function catOrderRel(e){
 function doneRank(e){const st=(e.data||{}).doneStat;return st==='完了'?2:(st==='保留'?1:0)}
 function sortForList(list){return list.sort((a,b)=>catOrderRel(a)-catOrderRel(b)||doneRank(a)-doneRank(b)||((b.ts||0)-(a.ts||0)))}
 function matches(e,q){
-  const hay=[catName(e.cat),...entryValues(e)].join(' ');
-  return q.split(/[\s\u3000]+/).filter(Boolean).every(t=>hay.includes(t));
+  const hay=[catName(e.cat),e.no||'',...entryValues(e)].join(' ');
+  return q.split(/[\s\u3000]+/).filter(Boolean).every(t=>{
+    /* \u300cA-12\u300d\u5f62\u5f0f\u306f\u305d\u306e\u756a\u53f7\u306e1\u4ef6\u3060\u3051\u306b\u4e00\u81f4\u3055\u305b\u308b */
+    if(/^[A-Za-z]-\d+$/.test(t))return String(e.no||'').toUpperCase()===t.toUpperCase();
+    return hay.includes(t);
+  });
 }
 
 function summaryHTML(e){
@@ -2035,17 +2226,30 @@ function summaryHTML(e){
   let badges='';
   fs.filter(f=>f.type==='flags'&&Array.isArray(d[f.k])&&d[f.k].length).forEach(f=>{
     sortFlags(d[f.k].slice()).forEach(fv=>{
-      if(fv==='なし'||fv==='基本')return;
-      const cls=fv==='緊急'?' pa':fv==='重要'?' pb':'';
+      if(fv==='なし'||fv==='基本'||fv==='不急')return; /* 不急はバッジを出さない(緊急だけ目立たせる) */
+      if(fv==='緊急'){
+        /* タップ1回+確認で緊急解除できるバッジ */
+        badges+=`<span class="badge pa tapx" onclick="event.stopPropagation();unUrgent('${escAttr(String(e.id))}')">緊急 ✕</span>`;
+        return;
+      }
+      const cls=fv==='重要'?' pb':'';
       badges+=`<span class="badge${cls}">${esc(fv)}</span>`;
     });
   });
+  if(e.cat==='pf'&&d.money){
+    if(d.money==='レシピ')badges+=`<span class="badge brecipe">レシピ</span>`;
+    else badges+=`<span class="badge ${d.money==='入金済み'?'bgreen':'bred'}">${esc(d.money)} ${fmtAmt(pfMoneyAmt(d))}</span>`;
+  }
+  if(e.cat==='anken'&&!e.arch){
+    const ln=ankenLinkInfo(ankenLabel(e)).n;
+    if(ln)badges+=`<span class="badge">紐づけ${ln}</span>`;
+  }
   statlines(e.cat).forEach(fd=>{
     const sv=d[fd.sk]||fd.options[0];
     const bcls=(sv===(fd.okv||fd.options[1]))?'bgreen':(sv==='保留'?'bgray':'bred');
     badges+=`<span class="badge ${bcls}">${esc(sv)}</span>`;
   });
-  badges+=fs.filter(f=>f.type==='select'&&d[f.k]&&d[f.k]!=='未設定'&&f.k!=='io').map(f=>{
+  badges+=fs.filter(f=>f.type==='select'&&d[f.k]&&d[f.k]!=='未設定'&&f.k!=='io'&&f.k!=='money').map(f=>{
     const val=d[f.k];const lab=(f.labels&&f.labels[val])||val;
     return `<span class="badge">${esc(lab)}</span>`;
   }).join('');
@@ -2071,16 +2275,22 @@ function summaryHTML(e){
   if(mainTxt)parts.push(esc(mainTxt));
   return {badges,line:parts.join('　')};
 }
+function visibleList(){
+  /* v61: ふだんは選択中タブの記録だけ表示。検索・案件・未請求・未入金のときは全タブ横断 */
+  const q=document.getElementById('searchBox').value.trim();
+  const tabScoped=!q&&!ankenFilter&&!billOn&&!payOn;
+  return sortForList(entries.filter(passFilters).filter(e=>!tabScoped||e.cat===activeCat).filter(e=>!q||matches(e,q)));
+}
 function renderTimeline(){
   buildSeikyuAgg();
-  const q=document.getElementById('searchBox').value.trim();
   const el=document.getElementById('timeline');el.innerHTML='';
   if(ankenFilter){
     let sb=0,sp=0;
     entries.forEach(x=>{
-      if(x.cat!=='seikyu'||x.arch)return;const xd=x.data||{};
+      if(x.arch)return;const xd=x.data||{};
       if(xd.anken!==ankenFilter)return;
-      sb+=Number(xd.billAmt)||0;sp+=Number(xd.payAmt)||0;
+      const mo=moneyOf(x);if(!mo)return;
+      sb+=mo.bill;sp+=mo.pay;
     });
     if(sb||sp){
       const zan=sb-sp;
@@ -2089,8 +2299,40 @@ function renderTimeline(){
       el.appendChild(g);
     }
   }
-  const list=sortForList(entries.filter(passFilters).filter(e=>!q||matches(e,q)));
-  if(!list.length){el.innerHTML='<div class="empty-timeline">表示できる記録がありません(完了分は「完了を含む」、保留分は「保留」で表示されます)</div>';renderBanner();renderKanriDash();return}
+  /* v62: メモタブでは未回収(請求計>入金計)の案件一覧を上部に表示。タップでその案件の元帳へ */
+  if(activeCat==='pf'&&!ankenFilter&&!document.getElementById('searchBox').value.trim()){
+    const rows=[];let tot=0,freeZan=0,freeN=0;
+    Object.keys(seikyuAgg.g).forEach(k=>{
+      const v=seikyuAgg.g[k];const zan=v.bill-v.pay;
+      if(zan<=0)return;
+      if(k.indexOf('A:')===0){rows.push({name:k.slice(2),zan:zan});tot+=zan}
+      else{freeZan+=zan;freeN++}
+    });
+    if(rows.length||freeN){
+      rows.sort((a,b)=>b.zan-a.zan);
+      const g=document.createElement('div');g.className='seikyu-sum';g.style.fontWeight='400';
+      const head=document.createElement('div');
+      head.style.cssText='font-weight:700;margin-bottom:4px';
+      head.innerHTML='未回収 '+(rows.length+freeN)+'件 <span class="zan-red num">合計 ¥'+(tot+freeZan).toLocaleString('ja-JP')+'</span> <span style="font-weight:400;font-size:.76rem;color:var(--sub)">タップで内訳を表示</span>';
+      g.appendChild(head);
+      rows.forEach(r=>{
+        const row=document.createElement('div');
+        row.style.cssText='padding:3px 0;cursor:pointer;font-size:.88rem';
+        row.innerHTML='<span class="zan-red num">¥'+r.zan.toLocaleString('ja-JP')+'</span>　'+esc(r.name.length>22?r.name.slice(0,22)+'…':r.name);
+        row.onclick=()=>{ankenFilter=r.name;listLimit=20;paintFilters();renderTimeline();window.scrollTo({top:0})};
+        g.appendChild(row);
+      });
+      if(freeN){
+        const row=document.createElement('div');
+        row.style.cssText='padding:3px 0;font-size:.8rem;color:var(--sub)';
+        row.textContent='案件に未紐づけの請求 ¥'+freeZan.toLocaleString('ja-JP')+'('+freeN+'件)';
+        g.appendChild(row);
+      }
+      el.appendChild(g);
+    }
+  }
+  const list=visibleList();
+  if(!list.length){el.innerHTML='<div class="empty-timeline">このタブに表示できる記録がありません(検索すると全タブから探せます。完了分は「完了を含む」、保留分は「保留」で表示されます)</div>';renderBanner();renderKanriDash();return}
   const shown=list.slice(0,listLimit);
   shown.forEach(e=>{
     try{
@@ -2098,7 +2340,7 @@ function renderTimeline(){
     const d=document.createElement('div');d.className='rec';
     d.innerHTML=`<div class="tabmark" style="background:${catColor(e.cat)}"></div>
       <div class="body">
-        <div class="meta"><span class="cat">${esc(catName(e.cat))}</span><span class="num">${fmt6(e.data.date)}</span>${s.badges}</div>
+        <div class="meta"><span class="cat">${esc(catName(e.cat))}</span><span class="num">${fmt6(e.data.date)}</span>${e.no?`<span class="num" style="font-size:.68rem">${esc(e.no)}</span>`:''}${s.badges}</div>
         <span class="txt">${s.line||'(内容なし)'}</span>
       </div>`;
     d.onclick=()=>openDetail(e.id);
@@ -2125,7 +2367,7 @@ function openDetail(id){
   detailId=id;
   const e=entries.find(x=>x.id===id);
   document.getElementById('detailTab').style.background=catColor(e.cat);
-  document.getElementById('detailCat').textContent=catName(e.cat);
+  document.getElementById('detailCat').textContent=catName(e.cat)+(e.no?'　'+e.no:'');
   document.getElementById('detailMeta').textContent=fmt6(e.data.date);
   const b=document.getElementById('detailBody');
   b.innerHTML=catFields(e.cat).filter(f=>f.k!=='date').map(f=>{
@@ -2134,6 +2376,8 @@ function openDetail(id){
       if(!arr.length)return'';
       const pills=arr.map(x=>x==='なし'
         ?`<span style="font-size:.9rem;color:var(--sub)">なし</span>`
+        :x==='不急'
+        ?`<span class="bpill gray">不急</span>`
         :`<span class="bpill ${x==='緊急'?'fy':'fp'}">${esc(x)}</span>`).join('');
       return `<div class="dl"><div class="k">区分</div><div class="v">${pills}</div></div>`;
     }
@@ -2159,6 +2403,9 @@ function openDetail(id){
     if(f.type==='select'&&f.labels&&f.labels[v])v=f.labels[v]+'('+v+')';
     return `<div class="dl"><div class="k">${f.label.replace(/(＋.*)/,'').trim()}</div><div class="v">${esc(v)}</div></div>`;
   }).join('');
+  if(e.data&&e.data.mergedInto){
+    b.innerHTML+=`<div class="dl"><div class="k">統合先</div><div class="v">${esc((e.data.mergedIntoNo?e.data.mergedIntoNo+'　':'')+e.data.mergedInto)}</div></div>`;
+  }
   const acts=document.getElementById('detailActions');
   if(e.arch){
     let abtns='<button onclick="copyOne()">この1件をコピー</button><button onclick="unarchiveOne()">一覧に戻す</button>';
@@ -2166,6 +2413,7 @@ function openDetail(id){
     acts.innerHTML=abtns;
   }else{
     let btns='<button onclick="copyOne()">この1件をコピー</button><button onclick="editOne()">編集する</button>';
+    if(e.cat==='anken')btns+='<button onclick="mergeAnkenStart()">別の案件にまとめる</button>';
     if(e.data&&e.data.anken&&e.cat!=='anken')btns+='<button onclick="jumpToAnken()">紐づく案件を開く</button>';
     btns+='<button class="danger" onclick="archiveOne()">アーカイブ</button>';
     acts.innerHTML=btns;
@@ -2175,13 +2423,14 @@ function openDetail(id){
 function jumpToAnken(){
   const cur=entries.find(x=>String(x.id)===String(detailId));
   if(!cur||!cur.data||!cur.data.anken)return;
-  const t=entries.find(x=>x.cat==='anken'&&ankenLabel(x)===cur.data.anken);
+  const t=entries.find(x=>x.cat==='anken'&&!x.arch&&ankenLabel(x)===cur.data.anken)
+    ||entries.find(x=>x.cat==='anken'&&ankenLabel(x)===cur.data.anken);
   if(!t){toastErr('紐づく案件が見つかりません(案件の内容や相手方が後から変わった可能性があります)');return}
   openDetail(t.id);
 }
 function closeDetail(){document.getElementById('detailOverlay').classList.remove('open')}
 function entryText(e){
-  const lines=['【'+catName(e.cat)+'】'+iso6(e.data.date)];
+  const lines=['【'+catName(e.cat)+'】'+(e.no?e.no+'　':'')+iso6(e.data.date)];
   catFields(e.cat).filter(f=>f.k!=='date').forEach(f=>{
     if(f.type==='statline'){
       const sv=e.data[f.sk]||f.options[0];
@@ -2220,6 +2469,18 @@ function canQuickDone(e){
   const fd=statlines(e.cat).find(f=>f.sk==='doneStat');
   if(!fd)return false;
   return ((e.data||{}).doneStat||fd.options[0])!=='完了';
+}
+function unUrgent(id){
+  askConfirm('緊急を解除していいですか?(区分は「不急」になります)','解除する',()=>{
+    const e=entries.find(x=>String(x.id)===String(id));
+    if(!e)return;
+    const d=e.data||(e.data={});
+    d.prio=['不急'];
+    saveLocal();
+    enqueue({action:'save',entry:e,cols:colsOf(e)});
+    renderTimeline();
+    toast('緊急を解除しました');
+  });
 }
 function quickDone(id){
   askConfirm('この記録を「完了」にしますか?','完了にする',()=>{
@@ -2267,7 +2528,7 @@ function hardDeleteOne(){
 }
 function copyAll(){
   const q=document.getElementById('searchBox').value.trim();
-  const list=sortForList(entries.filter(passFilters).filter(e=>!q||matches(e,q)));
+  const list=visibleList();
   if(!list.length){toastErr('コピーする記録がありません');return}
   askConfirm(q?`検索結果 ${list.length}件をコピーしますか?`:`全 ${list.length}件をコピーしますか?`,'コピーする',()=>{
     const text=list.map(entryText).join('\n----------------------------------------\n');
@@ -2298,8 +2559,8 @@ function escAttr(s){return esc(s).replace(/"/g,'&quot;')}
 (function(){
   const ec=document.getElementById('entrycard');
   if(ec){
-    ['input','click','focusin','keydown','touchstart'].forEach(ev=>{
-      ec.addEventListener(ev,()=>{lastTouch=Date.now()},true);
+    ['input','change','click','focusin','keydown','touchstart'].forEach(ev=>{
+      ec.addEventListener(ev,()=>{lastTouch=Date.now();saveDraft()},true);
     });
   }
 })();
@@ -2326,7 +2587,8 @@ function escAttr(s){return esc(s).replace(/"/g,'&quot;')}
 document.getElementById('appVer').textContent=APP_VER;
 loadLocal();
 migrate();
-renderTabs();renderFields();
+renderTabs();
+if(!restoreDraft())renderFields(); /* 入力途中の下書きがあれば復元 */
 setTimeout(renderTimeline,0);
 updStat();
 if(!apiKey){showKeyScreen('初回設定です');updStat('未接続');}
