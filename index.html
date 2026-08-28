@@ -87,6 +87,13 @@ textarea.big{min-height:170px}
 .selrow button.on.prio-c{background:#8A93A6;border-color:#8A93A6}
 .selrow button.on.mk-rec{background:#5F7F5F;border-color:#5F7F5F}
 .badge.brecipe{background:#E7F0D8;border-color:#9DBA7F;color:#232A35;font-weight:700}
+/* 写真(v65) */
+.phrow{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.phbox{position:relative;display:inline-block}
+.phthumb{width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid var(--line);background:#F0F1EE;display:block}
+.phbox .phx{position:absolute;top:-7px;right:-7px;background:var(--danger);color:#fff;border:none;border-radius:50%;width:22px;height:22px;font-size:.8rem;cursor:pointer;line-height:1;padding:0}
+.phadd{border:1px dashed var(--sub);background:none;color:var(--sub);border-radius:8px;padding:14px 16px;font-size:.9rem;cursor:pointer;font-family:inherit}
+.dphoto{max-width:100%;border-radius:10px;border:1px solid var(--line);margin:4px 0;display:block;background:#F0F1EE;min-height:60px}
 .selrow button.addopt{border:1px dashed var(--sub);background:none;color:var(--sub);padding:8px 12px}
 /* 時間ワンタップ */
 .minrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
@@ -358,6 +365,8 @@ textarea.big.oneline.expanded{height:240px;min-height:240px}
   </div>
 </div>
 
+<input type="file" id="photoFile" accept="image/*" multiple style="display:none" onchange="photoPicked(this)">
+
 <div id="toast"></div>
 
 <script>
@@ -371,12 +380,47 @@ const PALETTE=['#3B6FB5','#7B5EA7','#5F7F5F','#9E5E8A','#A84A3B','#4E6E9E','#8A7
 
 /* =============== 同期レイヤー(GAS+スプレッドシート) =============== */
 const GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
-const APP_VER='v64';
+const APP_VER='v65';
 const LS_KEY='ql_key', LS_CACHE='ql_cache_v32', LS_OUTBOX='ql_outbox_v1';
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
 let apiKey=lsGet(LS_KEY)||'';
 let outbox=[];try{outbox=JSON.parse(lsGet(LS_OUTBOX)||'[]')||[]}catch(e){outbox=[]}
+/* ---- 写真の送信待ち(v65)。記録本体とは別レーンにして、写真の失敗が記録の同期を止めないようにする ---- */
+const LS_IMGBOX='ql_imgbox_v1';
+let imgbox=[];try{imgbox=JSON.parse(lsGet(LS_IMGBOX)||'[]')||[]}catch(e){imgbox=[]}
+function saveImgbox(){lsSet(LS_IMGBOX,JSON.stringify(imgbox))}
+function imgEnqueue(id,data){imgbox.push({id:id,data:data});saveImgbox();updStat();imgFlush()}
+let imgFlushing=false;
+async function imgFlush(){
+  if(imgFlushing||!imgbox.length||!apiKey)return;
+  imgFlushing=true;
+  while(imgbox.length){
+    const op=imgbox[0];
+    try{
+      const res=await fetch(GAS_URL,{method:'POST',body:JSON.stringify({key:apiKey,action:'imgup',id:op.id,data:op.data})});
+      const j=await res.json();
+      if(j&&j.ok){imgbox.shift();saveImgbox();updStat()}
+      else break; /* GAS未対応・エラー時はここで止め、30秒ごとに自動再送 */
+    }catch(e){break}
+  }
+  imgFlushing=false;updStat();
+}
+const photoCache={}; /* 表示用: 取得済み写真(このセッションの間だけ記憶) */
+let photoData={};    /* 選んだ直後の写真(送信前プレビュー用) */
+async function loadPhoto(id){
+  if(photoData[id])return photoData[id];
+  if(photoCache[id])return photoCache[id];
+  const pend=imgbox.find(o=>o.id===id);
+  if(pend)return pend.data;
+  if(!apiKey)return null;
+  try{
+    const res=await fetch(GAS_URL+'?key='+encodeURIComponent(apiKey)+'&img='+encodeURIComponent(id));
+    const j=await res.json();
+    if(j&&j.ok&&j.data){photoCache[id]=j.data;return j.data}
+  }catch(e){}
+  return null;
+}
 function uid(){return 'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
 /* ---- 通し番号(v64)。番号は指紋であって分類ではない: 一度振ったら統合・タブ移動でも不変、再利用しない ---- */
 const NO_PREFIX={task:'T',kanri:'K',jikan:'J',shukan:'S',pf:'M',shushi:'F',anken:'A',bukken:'B',neta:'N',hiyari:'H',genkin:'Z'};
@@ -592,7 +636,8 @@ function migrate(){
 }
 function updStat(msg){
   const el=document.getElementById('syncStat');if(!el)return;
-  const t=msg||(outbox.length?('送信待ち '+outbox.length+'件'):'同期済み');
+  const n=outbox.length+imgbox.length;
+  const t=msg||(n?('送信待ち '+n+'件'+(imgbox.length?'(うち写真'+imgbox.length+')':'')):'同期済み');
   el.textContent=t;
   const warn=/オフライン|送信待ち|未接続|違います/.test(t);
   el.style.color=warn?'#E05656':'#3FCF8E';
@@ -677,6 +722,9 @@ function colsOf(e){
         break;
       case 'deadlist':
         if(Array.isArray(v)&&v.length)others.push('手動期限: '+v.map(x=>x.n+'('+(iso6(x.d)||x.d)+(x.r?'・毎年':'')+')').join('、'));
+        break;
+      case 'photos':
+        if(Array.isArray(v)&&v.length)others.push('写真: '+v.length+'枚');
         break;
       case 'text': case 'textarea': case 'bigtext':
         if(f.main){c.content=oneline(v||'')}
@@ -850,7 +898,8 @@ let cats=[
    {k:'anken',label:'案件に紐づけ(任意)',type:'ankenlink'},
    {k:'bukkenref',label:'物件に紐づけ(任意)',type:'bukkenlink'},
    {k:'money',label:'マーク(任意)',type:'select',optional:true,options:['請求済み','入金済み','レシピ'],cls:{'請求済み':'io-out','入金済み':'io-in','レシピ':'mk-rec'},hint:'請求済み・入金済みは内容の金額(「55,000円」等)を自動で読み取ります'},
-   {k:'content',label:'内容',type:'bigtext',ph:'メモ・気づきを自由に',main:1}]},
+   {k:'content',label:'内容',type:'bigtext',ph:'メモ・気づきを自由に',main:1},
+   {k:'photos',label:'写真(任意)',type:'photos'}]},
  {id:'shushi',name:'収支',color:'#1F5C40',text:'#fff',fields:[
    {k:'date',label:'日付',type:'date6'},
    {k:'io',label:'収入 / 支出',type:'select',options:['収入','支出'],def:'支出',cls:{'収入':'io-in','支出':'io-out'}},
@@ -946,6 +995,7 @@ let activeGroup='g1';
 let pickerTarget=null;   // 単一選択の対象(ボタンのid)
 let pickerListK=null;    // 複数選択の対象(personlistのフィールドキー)
 let plState={};          // personlistの現在値 {k:[名前,...]}
+let phState=[];          // 写真の現在値 [写真ID,...]
 
 /* ---- 自作ダイアログ(prompt/confirmの代わり。全環境で動く) ---- */
 let askCb=null;
@@ -1132,9 +1182,12 @@ function renderFields(vals={}){
   const c=catOf(activeCat);
   const f=document.getElementById('fields');
   document.getElementById('editingNote').style.display=editingId?'block':'none';
-  selState={};plState={};
+  selState={};plState={};phState=[];
   c.fields.filter(x=>x.type==='personlist').forEach(x=>{
     plState[x.k]=Array.isArray(vals[x.k])?vals[x.k].slice():[];
+  });
+  c.fields.filter(x=>x.type==='photos').forEach(x=>{
+    phState=Array.isArray(vals[x.k])?vals[x.k].slice():[];
   });
   let html='',i=0;const fsArr=c.fields;
   while(i<fsArr.length){
@@ -1176,6 +1229,7 @@ function renderFields(vals={}){
   durState=+(vals.durMin)||0;
   paintDur();
   c.fields.filter(x=>x.type==='personlist').forEach(x=>renderPL(x.k));
+  if(c.fields.some(x=>x.type==='photos'))renderPhotos();
   applyShowIf();applyBigIf();
   const main=c.fields.find(x=>x.main);
   if(main&&!editingId){const e=document.getElementById('f_'+main.k);if(e&&e.focus)setTimeout(()=>{try{e.focus({preventScroll:true})}catch(_){ }window.scrollTo({top:0})},50)}
@@ -1202,6 +1256,7 @@ function fieldHTML(fd,vals){
     case 'unitnum':return wrap(`<span style="display:flex;align-items:center;gap:6px"><input type="text" class="date6 num" id="f_${fd.k}" inputmode="numeric" maxlength="5" value="${escAttr(v||'')}"><span style="font-size:.85rem;color:var(--sub)">${esc(fd.unit||'')}</span></span>`);
     case 'deadlist':return wrap(`<div id="f_${fd.k}"></div><button type="button" class="dladd" onclick="dlAdd('${fd.k}')">＋ 期限を追加</button>`);
     case 'personlist':return wrap(`<div class="plchips" id="f_${fd.k}"></div>`);
+    case 'photos':return wrap(`<div class="phrow" id="f_${fd.k}"></div>`);
     case 'text':return wrap(`<input type="text" id="f_${fd.k}" placeholder="${escAttr(fd.ph||'')}" value="${escAttr(v||'')}">`);
     case 'textarea':return wrap(`<textarea id="f_${fd.k}" placeholder="${escAttr(fd.ph||'')}">${esc(v||'')}</textarea>`);
     case 'bigtext':return wrap(`<textarea class="big${fd.compact?' oneline':''}" id="f_${fd.k}" placeholder="${escAttr(fd.ph||'')}">${esc(v||'')}</textarea>`);
@@ -1257,6 +1312,55 @@ function renderPL(k){
   add.className='pladd';
   add.textContent=(plState[k]&&plState[k].length)?'＋追加':'＋タップして選択';
   add.onclick=()=>openPickerForList(k,fd?fd.label:'人物');
+  el.appendChild(add);
+}
+/* ---- 写真の選択・縮小・プレビュー(v65) ---- */
+function pickPhoto(){const e=document.getElementById('photoFile');if(e)e.click()}
+function photoPicked(inp){
+  const files=Array.from(inp.files||[]);
+  inp.value='';
+  if(!files.length)return;
+  files.slice(0,10).forEach(f=>{
+    const r=new FileReader();
+    r.onload=()=>{
+      const img=new Image();
+      img.onload=()=>{
+        try{
+          const MAX=1280;
+          let w=img.width,h=img.height;
+          if(Math.max(w,h)>MAX){const k=MAX/Math.max(w,h);w=Math.round(w*k);h=Math.round(h*k)}
+          const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+          cv.getContext('2d').drawImage(img,0,0,w,h);
+          const dataURL=cv.toDataURL('image/jpeg',0.72);
+          const id='p'+Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+          photoData[id]=dataURL;
+          phState.push(id);
+          imgEnqueue(id,dataURL); /* 選んだ瞬間に送信待ちへ(下書き復元でも写真が残るように) */
+          renderPhotos();
+          saveDraft();
+        }catch(e){toastErr('画像を取り込めませんでした')}
+      };
+      img.onerror=()=>toastErr('この画像形式は読み込めませんでした');
+      img.src=r.result;
+    };
+    r.readAsDataURL(f);
+  });
+}
+function renderPhotos(){
+  const el=document.getElementById('f_photos');if(!el)return;
+  el.innerHTML='';
+  phState.forEach(pid=>{
+    const box=document.createElement('span');box.className='phbox';
+    const im=document.createElement('img');im.className='phthumb';im.alt='';
+    loadPhoto(pid).then(d=>{if(d)im.src=d});
+    const x=document.createElement('button');x.className='phx';x.type='button';x.textContent='×';
+    x.onclick=()=>{phState=phState.filter(p=>p!==pid);renderPhotos();saveDraft()};
+    box.appendChild(im);box.appendChild(x);
+    el.appendChild(box);
+  });
+  const add=document.createElement('button');add.className='phadd';add.type='button';
+  add.textContent='📷 写真を追加';
+  add.onclick=pickPhoto;
   el.appendChild(add);
 }
 function statFd(k){return catOf(activeCat).fields.find(x=>x.k===k&&x.type==='statline')}
@@ -1458,6 +1562,10 @@ function readFields(){
     }
     if(fd.type==='personlist'){
       d[fd.k]=(plState[fd.k]||[]).slice();
+      return;
+    }
+    if(fd.type==='photos'){
+      d[fd.k]=phState.slice();
       return;
     }
     if(fd.type==='flags'){
@@ -2244,6 +2352,7 @@ function summaryHTML(e){
     const ln=ankenLinkInfo(ankenLabel(e)).n;
     if(ln)badges+=`<span class="badge">紐づけ${ln}</span>`;
   }
+  if(Array.isArray(d.photos)&&d.photos.length)badges+=`<span class="badge">📷${d.photos.length}</span>`;
   statlines(e.cat).forEach(fd=>{
     const sv=d[fd.sk]||fd.options[0];
     const bcls=(sv===(fd.okv||fd.options[1]))?'bgreen':(sv==='保留'?'bgray':'bred');
@@ -2388,6 +2497,7 @@ function openDetail(id){
         <span class="bpill ${(sv===(f.okv||f.options[1]))?'green':(sv==='保留'?'gray':'red')}">${esc(sv)}</span>
         ${dspan}</div></div>`;
     }
+    if(f.type==='photos')return''; /* 写真は下でまとめて表示 */
     let v=e.data[f.k];
     if(v===''||v===undefined||v===null)return'';
     if(Array.isArray(v)){if(!v.length)return'';v=v.join('、')}
@@ -2405,6 +2515,20 @@ function openDetail(id){
   }).join('');
   if(e.data&&e.data.mergedInto){
     b.innerHTML+=`<div class="dl"><div class="k">統合先</div><div class="v">${esc((e.data.mergedIntoNo?e.data.mergedIntoNo+'　':'')+e.data.mergedInto)}</div></div>`;
+  }
+  if(Array.isArray(e.data.photos)&&e.data.photos.length){
+    const wrap=document.createElement('div');wrap.className='dl';
+    wrap.innerHTML='<div class="k">写真</div>';
+    e.data.photos.forEach(pid=>{
+      const im=document.createElement('img');
+      im.className='dphoto';im.alt='読み込み中…';
+      wrap.appendChild(im);
+      loadPhoto(pid).then(d=>{
+        if(d)im.src=d;
+        else im.alt='写真を読み込めませんでした(送信待ちの可能性。電波のある所で開き直してください)';
+      });
+    });
+    b.appendChild(wrap);
   }
   const acts=document.getElementById('detailActions');
   if(e.arch){
@@ -2439,6 +2563,7 @@ function entryText(e){
       return;
     }
     let v=e.data[f.k];
+    if(f.type==='photos'){if(Array.isArray(v)&&v.length)lines.push('写真: '+v.length+'枚');return}
     if(v===''||v===undefined||v===null)return;
     if(Array.isArray(v)){if(!v.length)return;v=v.join('、')}
     if(f.type==='amount')v=fmtAmt(v);
@@ -2593,12 +2718,13 @@ setTimeout(renderTimeline,0);
 updStat();
 if(!apiKey){showKeyScreen('初回設定です');updStat('未接続');}
 else{fetchAll();}
-window.addEventListener('online',()=>{flush();if(apiKey){fetchRetry=0;fetchAll();}});
+window.addEventListener('online',()=>{flush();imgFlush();if(apiKey){fetchRetry=0;fetchAll();}});
 document.addEventListener('visibilitychange',()=>{
   /* スマホでアプリに戻ってきた時、30秒以上経っていれば最新データを取り直す */
   if(document.visibilityState==='visible'&&apiKey&&Date.now()-lastFetchOk>30000){fetchRetry=0;fetchAll();}
 });
-setInterval(flush,30000);
+setInterval(()=>{flush();imgFlush()},30000);
+imgFlush();
 </script>
 </body>
 </html>
