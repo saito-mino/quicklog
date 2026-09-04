@@ -126,6 +126,7 @@ textarea.big{min-height:170px}
 .timeline{display:flex;flex-direction:column;gap:10px}
 .rec{display:flex;background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;cursor:pointer}
 .rec:hover{border-color:var(--sub)}
+.rec.pinned{border-left:3px solid var(--focus)}
 .rec .tabmark{flex:0 0 8px}
 .rec .body{padding:10px 14px;flex:1;min-width:0}
 .rec .qdone{flex:0 0 auto;align-self:stretch;min-width:52px;border:none;border-left:1px solid var(--line);background:transparent;color:var(--ok);font-size:.74rem;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:0 8px}
@@ -380,7 +381,7 @@ const PALETTE=['#3B6FB5','#7B5EA7','#5F7F5F','#9E5E8A','#A84A3B','#4E6E9E','#8A7
 
 /* =============== 同期レイヤー(GAS+スプレッドシート) =============== */
 const GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
-const APP_VER='v65';
+const APP_VER='v66';
 const LS_KEY='ql_key', LS_CACHE='ql_cache_v32', LS_OUTBOX='ql_outbox_v1';
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
@@ -733,6 +734,7 @@ function colsOf(e){
         break;
     }
   });
+  if(d.pin)others.push('📌ピン留め');
   if(d.doneAt)others.push('完了時刻: '+String(d.doneAt).slice(11,16));
   if(d.manualDone)others.push('手動完了日: '+d.manualDone);
   if(d.durMin)others.push('所要: '+d.durMin+'分');
@@ -1590,6 +1592,8 @@ function saveEntry(){
   if(editingId){
     const prev=entries.find(x=>String(x.id)===String(editingId));
     if(prev&&Array.isArray(prev.data.doneKeys))d.doneKeys=prev.data.doneKeys;
+    /* ピン留めはフォーム項目化していないので、上書き保存時に消えないよう旧データから引き継ぐ(仕様F) */
+    if(prev&&prev.data&&prev.data.pin)d.pin=prev.data.pin;
     /* カルテは非表示中の欄の値を消さずに引き継ぐ(区分切替やレイアウト変更でデータが飛ばないように) */
     if(activeCat==='kanri'&&prev&&prev.data)Object.keys(prev.data).forEach(k=>{if(!(k in d))d[k]=prev.data[k]});
   }
@@ -2318,8 +2322,9 @@ function catOrderRel(e){
   if(e.cat===activeCat)return 0;
   return (CAT_ORDER[e.cat]||50)+1;
 }
+function pinRank(e){return (e.data||{}).pin?0:1}
 function doneRank(e){const st=(e.data||{}).doneStat;return st==='完了'?2:(st==='保留'?1:0)}
-function sortForList(list){return list.sort((a,b)=>catOrderRel(a)-catOrderRel(b)||doneRank(a)-doneRank(b)||((b.ts||0)-(a.ts||0)))}
+function sortForList(list){return list.sort((a,b)=>catOrderRel(a)-catOrderRel(b)||pinRank(a)-pinRank(b)||doneRank(a)-doneRank(b)||((b.ts||0)-(a.ts||0)))}
 function matches(e,q){
   const hay=[catName(e.cat),e.no||'',...entryValues(e)].join(' ');
   return q.split(/[\s\u3000]+/).filter(Boolean).every(t=>{
@@ -2446,10 +2451,11 @@ function renderTimeline(){
   shown.forEach(e=>{
     try{
     const s=summaryHTML(e);
-    const d=document.createElement('div');d.className='rec';
+    const pinned=!!(e.data&&e.data.pin);
+    const d=document.createElement('div');d.className='rec'+(pinned?' pinned':'');
     d.innerHTML=`<div class="tabmark" style="background:${catColor(e.cat)}"></div>
       <div class="body">
-        <div class="meta"><span class="cat">${esc(catName(e.cat))}</span><span class="num">${fmt6(e.data.date)}</span>${e.no?`<span class="num" style="font-size:.68rem">${esc(e.no)}</span>`:''}${s.badges}</div>
+        <div class="meta"><span class="cat">${esc(catName(e.cat))}</span><span class="num">${fmt6(e.data.date)}</span>${e.no?`<span class="num" style="font-size:.68rem">${esc(e.no)}</span>`:''}${pinned?'<span class="badge">📌</span>':''}${s.badges}</div>
         <span class="txt">${s.line||'(内容なし)'}</span>
       </div>`;
     d.onclick=()=>openDetail(e.id);
@@ -2537,6 +2543,10 @@ function openDetail(id){
     acts.innerHTML=abtns;
   }else{
     let btns='<button onclick="copyOne()">この1件をコピー</button><button onclick="editOne()">編集する</button>';
+    if(e.cat==='task'||e.cat==='anken'){
+      const pinned=!!(e.data&&e.data.pin);
+      btns+=`<button onclick="togglePin('${escAttr(String(e.id))}')">${pinned?'📌ピン解除':'📌ピン留め'}</button>`;
+    }
     if(e.cat==='anken')btns+='<button onclick="mergeAnkenStart()">別の案件にまとめる</button>';
     if(e.data&&e.data.anken&&e.cat!=='anken')btns+='<button onclick="jumpToAnken()">紐づく案件を開く</button>';
     btns+='<button class="danger" onclick="archiveOne()">アーカイブ</button>';
@@ -2620,6 +2630,17 @@ function quickDone(id){
     renderTimeline();
     toast('完了にしました');
   });
+}
+function togglePin(id){
+  const e=entries.find(x=>String(x.id)===String(id));
+  if(!e)return;
+  const d=e.data||(e.data={});
+  if(d.pin){delete d.pin}else{d.pin=true}
+  saveLocal();
+  enqueue({action:'save',entry:e,cols:colsOf(e)});
+  closeDetail();
+  renderTimeline();
+  toast(d.pin?'ピン留めしました':'ピン留めを解除しました');
 }
 function archiveOne(){
   const id=detailId;
