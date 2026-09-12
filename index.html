@@ -170,6 +170,8 @@ textarea.big{min-height:170px}
 .kd-toggle{float:right;font-size:.72rem;padding:3px 8px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--sub);cursor:pointer}
 textarea.big.oneline{min-height:46px;height:46px;transition:height .15s ease}
 textarea.big.oneline.expanded{height:240px;min-height:240px}
+/* v69: 既存記録の内容は、編集中だけ10行分を開いておく */
+textarea.edit-content{height:calc(15em + 20px);min-height:calc(15em + 20px);line-height:1.5}
 .kd-soon .kd-days{color:#7A5C00}
 .kd-date{font-size:.78rem;color:var(--sub)}
 .kd-cust{font-weight:700;font-size:.9rem}
@@ -392,7 +394,7 @@ const PALETTE=['#3B6FB5','#7B5EA7','#5F7F5F','#9E5E8A','#A84A3B','#4E6E9E','#8A7
 
 /* =============== 同期レイヤー(GAS+スプレッドシート) =============== */
 const GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
-const APP_VER='v68';
+const APP_VER='v69';
 const LS_KEY='ql_key', LS_CACHE='ql_cache_v32', LS_OUTBOX='ql_outbox_v1';
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
@@ -1393,6 +1395,9 @@ function selButtonsHTML(fd){
 function fieldHTML(fd,vals){
   const v=vals[fd.k];
   const wrap=(inner)=>`<div class="field" id="w_${fd.k}"><label>${fd.label}${fd.hint?` <span style="letter-spacing:0;color:#A9AFB9">— ${fd.hint}</span>`:''}</label>${inner}</div>`;
+  if(editingId&&fd.k==='content'&&['text','textarea','bigtext'].includes(fd.type)){
+    return wrap(`<textarea class="edit-content" rows="10" id="f_${fd.k}" placeholder="${escAttr(fd.ph||'')}">${esc(v||'')}</textarea>`);
+  }
   switch(fd.type){
     case 'date6':{
       const val=v||today6();
@@ -1855,7 +1860,8 @@ function renderAnkenList(){
   const list=entries.filter(e=>e.cat==='anken'&&!e.arch)
     .filter(e=>ankenTarget!=='__merge__'||String(e.id)!==String(mergeSrcId))
     .filter(e=>ankenShowDone||(e.data||{}).doneStat!=='完了')
-    .filter(e=>!q||ankenLabel(e).includes(q)||entryValues(e).join(' ').includes(q));
+    .filter(e=>!q||ankenLabel(e).includes(q)||entryValues(e).join(' ').includes(q))
+    .sort((a,b)=>pinRank(a)-pinRank(b));
   if(!list.length){el.innerHTML='<div style="color:var(--sub);font-size:.85rem;padding:14px 4px">該当する案件がありません(完了済みは「完了した案件を含む」で表示されます)。</div>'}
   list.forEach(e=>{
     const b=document.createElement('button');
@@ -1863,7 +1869,7 @@ function renderAnkenList(){
     const info=ankenLinkInfo(lbl);
     const own=(e.data||{}).date;
     const meta=[e.no||'',own?'発生 '+fmt6(own):'','紐づけ'+info.n+'件',info.last?'最終 '+tsDate(info.last):''].filter(Boolean).join('・');
-    b.innerHTML=esc(lbl)+'<br><span style="font-size:.74rem;color:var(--sub)">'+esc(meta)+'</span>';
+    b.innerHTML=((e.data||{}).pin?'📌 ':'')+esc(lbl)+'<br><span style="font-size:.74rem;color:var(--sub)">'+esc(meta)+'</span>';
     b.onclick=()=>pickAnken(lbl);
     el.appendChild(b);
   });
