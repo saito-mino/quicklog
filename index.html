@@ -392,7 +392,7 @@ const PALETTE=['#3B6FB5','#7B5EA7','#5F7F5F','#9E5E8A','#A84A3B','#4E6E9E','#8A7
 
 /* =============== 同期レイヤー(GAS+スプレッドシート) =============== */
 const GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
-const APP_VER='v67';
+const APP_VER='v68';
 const LS_KEY='ql_key', LS_CACHE='ql_cache_v32', LS_OUTBOX='ql_outbox_v1';
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
@@ -1034,7 +1034,7 @@ let cats=[
    {k:'minutes',label:'所要時間(自動計算・直接入力も可)',type:'minutes'}]},
  {id:'shukan',name:'習慣',color:'#4A3A6B',text:'#fff',fields:[
    {k:'date',label:'日付',type:'date6'},
-   {k:'kind',label:'種類',type:'select',options:['ダッシュ','節約','筋トレ','ストレッチ','減塩','階段','積立','片付け','御恩']},
+   {k:'kind',label:'種類',type:'select',options:['ダッシュ','節約','筋トレ','ストレッチ','減塩','階段','積立','片付け','御恩'],labels:{'御恩':'EP'},labelOnly:true},
    {k:'seconds',label:'秒数',type:'seconds',showIf:{k:'kind',vs:['ダッシュ','筋トレ','ストレッチ']}},
    {k:'amount',label:'節約額(円)',type:'amount',showIf:{k:'kind',v:'節約'}},
    {k:'genen',label:'塩を振る回数を減らした',type:'unitnum',unit:'回',showIf:{k:'kind',v:'減塩'}},
@@ -2370,6 +2370,8 @@ function entryValues(e){
     if(Array.isArray(v)){if(v.length)vals.push(v.join(' '))}
     else vals.push(String(v));
   });
+  /* v68: 表示名でも検索できるようにする。保存値は既存記録との互換性のため維持。 */
+  catFields(e.cat).forEach(f=>{if(f.labelOnly&&f.labels&&f.labels[e.data[f.k]])vals.push(f.labels[e.data[f.k]])});
   return vals;
 }
 let urgOn=false,impOn=false,showDone=false,ankenFilter='',archOn=false,holdOn=false,billOn=false,payOn=false;
@@ -2666,7 +2668,7 @@ function openDetail(id){
     if(f.type==='ymd8')v=(typeof v==='string'&&v.length===8)?v.slice(0,4)+'-'+v.slice(4,6)+'-'+v.slice(6,8):v;
     if(f.type==='unitnum')v=v+(f.unit||'');
     if(f.type==='deadlist')v=(v||[]).map(x=>x.n+'('+(iso6(x.d)||x.d)+(x.r?'・毎年':'')+')').join('、');
-    if(f.type==='select'&&f.labels&&f.labels[v])v=f.labels[v]+'('+v+')';
+    if(f.type==='select'&&f.labels&&f.labels[v])v=f.labelOnly?f.labels[v]:f.labels[v]+'('+v+')';
     return `<div class="dl"><div class="k">${f.label.replace(/(＋.*)/,'').trim()}</div><div class="v">${esc(v)}</div></div>`;
   }).join('');
   if(e.data&&e.data.mergedInto){
@@ -2735,6 +2737,7 @@ function entryText(e){
     if(f.type==='ymd8')v=(typeof v==='string'&&v.length===8)?v.slice(0,4)+'-'+v.slice(4,6)+'-'+v.slice(6,8):v;
     if(f.type==='unitnum')v=v+(f.unit||'');
     if(f.type==='deadlist')v=(v||[]).map(x=>x.n+'('+(iso6(x.d)||x.d)+(x.r?'・毎年':'')+')').join('、');
+    if(f.type==='select'&&f.labelOnly&&f.labels&&f.labels[v])v=f.labels[v];
     lines.push(f.label.replace(/[(（][^)）]*[)）]/g,'').replace(/(＋.*)/,'').trim()+': '+v);
   });
   return lines.join('\n');
