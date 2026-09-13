@@ -386,7 +386,7 @@ textarea.edit-content{height:calc(15em + 20px);min-height:calc(15em + 20px);line
 <script>
 /* =============================================================
    タブ定義(設計図)。部品type:
-   date6 / person / personlist(複数人・＋追加) / text / textarea /
+   date6 / person / place(場所選択) / personlist(複数人・＋追加) / text / textarea /
    bigtext / amount / minutes / select(extendable対応) /
    statline(省スペース型ステータス: プルダウン+日付欄)
    ============================================================= */
@@ -394,7 +394,7 @@ const PALETTE=['#3B6FB5','#7B5EA7','#5F7F5F','#9E5E8A','#A84A3B','#4E6E9E','#8A7
 
 /* =============== 同期レイヤー(GAS+スプレッドシート) =============== */
 const GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
-const APP_VER='v69';
+const APP_VER='v70';
 const LS_KEY='ql_key', LS_CACHE='ql_cache_v32', LS_OUTBOX='ql_outbox_v1';
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
@@ -445,7 +445,7 @@ async function loadPhoto(id){
 }
 function uid(){return 'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
 /* ---- 通し番号(v64)。番号は指紋であって分類ではない: 一度振ったら統合・タブ移動でも不変、再利用しない ---- */
-const NO_PREFIX={task:'T',kanri:'K',jikan:'J',shukan:'S',pf:'M',shushi:'F',anken:'A',bukken:'B',neta:'N',hiyari:'H',genkin:'Z'};
+const NO_PREFIX={task:'T',kanri:'K',jikan:'J',shukan:'S',pf:'M',shushi:'F',gyosei:'G',anken:'A',bukken:'B',neta:'N',hiyari:'H',genkin:'Z'};
 function parseNo(s){const m=/^([A-Z])-(\d+)$/.exec(String(s||''));return m?{p:m[1],n:+m[2]}:null}
 function issueNo(cat){
   const p=NO_PREFIX[cat];if(!p)return'';
@@ -753,7 +753,7 @@ function colsOf(e){
   fs.forEach(f=>{
     const v=d[f.k];
     switch(f.type){
-      case 'person':
+      case 'person': case 'place':
         if(f.k==='partner'){c.partner=v||''}
         else if(v){others.push(oLabel(f)+': '+v)}
         break;
@@ -1059,6 +1059,14 @@ let cats=[
    {k:'io',label:'収入 / 支出',type:'select',options:['収入','支出'],def:'支出',cls:{'収入':'io-in','支出':'io-out'}},
    {k:'amount',label:'金額(円)',type:'amount',main:1},
    {k:'content',label:'内容',type:'text',ph:'何のお金か'}]},
+ {id:'gyosei',name:'行政',color:'#4E6E9E',text:'#fff',fields:[
+   {k:'date',label:'発生日',type:'date6',row:'h1'},
+   {k:'done',label:'完了',type:'statline',sk:'doneStat',options:['未完了','保留','完了'],okv:'完了',dk:'doneDate',dlabel:'完了日',autoDate:true,row:'h1'},
+   {k:'prio',label:'区分(必須)',type:'flags',required:true,single:true,options:['緊急','不急'],cls:{'緊急':'prio-a','不急':'prio-c'}},
+   {k:'partner',label:'場所',type:'place',options:['福岡法務局','西福岡県税事務所','北九州県土整備事務所','福岡県土整備事務所','県北振興局','川棚町役場','福岡入管']},
+   {k:'anken',label:'案件(任意)',type:'ankenlink',row:'p'},
+   {k:'bukkenref',label:'物件(任意)',type:'bukkenlink',row:'p'},
+   {k:'content',label:'内容',type:'bigtext',compact:1,ph:'内容をパパッと書く',main:1}]},
  {id:'anken',name:'案件',color:'#E3D5EE',text:'#232A35',fields:[
    {k:'done',label:'完了',type:'statline',sk:'doneStat',options:['未完了','完了'],dk:'doneDate',dlabel:'完了日',autoDate:true,row:'h1'},
    {k:'date',label:'発生日',type:'date6',row:'h1'},
@@ -1405,6 +1413,11 @@ function fieldHTML(fd,vals){
     }
     case 'person':return wrap(`<button class="personbtn ${v?'':'empty'}" id="f_${fd.k}" onclick="openPicker('f_${fd.k}','${fd.label}')">${esc(v||'')}</button>`);
     case 'ankenlink':return wrap(`<button class="personbtn ${v?'':'empty'}" id="f_${fd.k}" onclick="openAnkenPicker('${fd.k}')">${esc(v||'')}</button>`);
+    case 'place':{
+      /* 場所は人物名簿と分ける。保存済みの値も候補に残し、編集時に失わない。 */
+      const options=[...new Set(['',...(fd.options||[]),...(v?[v]:[])])];
+      return wrap(`<select class="ddsel" id="f_${fd.k}" aria-label="${escAttr(fd.label)}">${options.map(o=>`<option value="${escAttr(o)}"${(v||'')===o?' selected':''}>${esc(o||'場所を選択')}</option>`).join('')}</select>`);
+    }
     case 'bukkenlink':return wrap(`<button class="personbtn ${v?'':'empty'}" id="f_${fd.k}" onclick="openBukkenPicker('${fd.k}')">${esc(v||'')}</button>`);
     case 'date6o':return wrap(`<input type="text" class="date6 num" id="f_${fd.k}" inputmode="numeric" maxlength="6" placeholder="未入力" value="${escAttr(v||'')}">`);
     case 'time4':return wrap(`<input type="text" class="date6 num" id="f_${fd.k}" inputmode="numeric" maxlength="4" placeholder="例:1400" value="${escAttr(v||'')}">`);
@@ -2475,7 +2488,7 @@ function passFilters(e){
   if(impOn&&!p.includes('不急'))return false;
   return true;
 }
-const CAT_ORDER={task:1,kanri:2,jikan:3,shukan:4,pf:5,shushi:6,anken:7,seikyu:7.5,bukken:8,neta:9,hiyari:9.5,recipe:10,houjin:11,kojin:12,genkin:13};
+const CAT_ORDER={task:1,kanri:2,jikan:3,shukan:4,pf:5,shushi:6,gyosei:6.5,anken:7,seikyu:7.5,bukken:8,neta:9,hiyari:9.5,recipe:10,houjin:11,kojin:12,genkin:13};
 function catOrderRel(e){
   if(e.cat===activeCat)return 0;
   return (CAT_ORDER[e.cat]||50)+1;
@@ -2528,7 +2541,7 @@ function summaryHTML(e){
   if(d.anken)badges+=`<span class="badge">${esc(String(d.anken).slice(0,14))}</span>`;
   if(d.bukkenref)badges+=`<span class="badge">${esc(String(d.bukkenref).slice(0,14))}</span>`;
   if(e.arch)badges+=`<span class="badge">アーカイブ</span>`;
-  const persons=fs.filter(f=>f.type==='person'&&d[f.k]&&f.k!=='delegate').map(f=>d[f.k]);
+  const persons=fs.filter(f=>(f.type==='person'||f.type==='place')&&d[f.k]&&f.k!=='delegate').map(f=>d[f.k]);
   let parts=[];
   if(persons.length)parts.push(esc(persons.join(' / ')));
   if(d.amount!==''&&d.amount!==undefined){
@@ -2701,7 +2714,7 @@ function openDetail(id){
     acts.innerHTML=abtns;
   }else{
     let btns='<button onclick="copyOne()">この1件をコピー</button><button onclick="editOne()">編集する</button>';
-    if(e.cat==='task'||e.cat==='anken'){
+    if(e.cat==='task'||e.cat==='gyosei'||e.cat==='anken'){
       const pinned=!!(e.data&&e.data.pin);
       btns+=`<button onclick="togglePin('${escAttr(String(e.id))}')">${pinned?'📌ピン解除':'📌ピン留め'}</button>`;
     }
