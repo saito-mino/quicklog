@@ -31,7 +31,7 @@ body{
 
 header{display:flex;align-items:baseline;justify-content:space-between;padding:10px 4px 14px}
 .logo{font-weight:700;font-size:1.15rem;letter-spacing:.14em}
-.logo small{font-weight:400;font-size:.66rem;color:var(--sub);letter-spacing:.05em;margin-left:8px}
+#syncStat{display:block;width:100%;border:0;background:none;padding:6px 0;margin:2px 0 0;text-align:left;font-family:inherit;font-weight:400;font-size:.75rem;color:var(--sub);letter-spacing:0;line-height:1.5;white-space:normal;cursor:pointer}
 
 /* 種類タブ(全面カラー) */
 .tabs{display:flex;gap:4px;overflow-x:auto;padding:4px 2px 0;scrollbar-width:thin}
@@ -251,7 +251,7 @@ textarea.edit-content{height:calc(15em + 20px);min-height:calc(15em + 20px);line
 <body>
 <div class="wrap">
   <header>
-    <div class="logo">QUICKLOG<span class="ver" id="appVer"></span><small id="syncStat" style="cursor:pointer" onclick="openSyncPanel()">起動中…</small></div>
+    <div class="logo">QUICKLOG<span class="ver" id="appVer"></span><button type="button" id="syncStat" onclick="openSyncPanel()">起動中…</button></div>
   </header>
 
   <div class="tabs" id="tabs"></div>
@@ -394,7 +394,7 @@ const PALETTE=['#3B6FB5','#7B5EA7','#5F7F5F','#9E5E8A','#A84A3B','#4E6E9E','#8A7
 
 /* =============== 同期レイヤー(GAS+スプレッドシート) =============== */
 const GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
-const APP_VER='v70';
+const APP_VER='v71';
 const LS_KEY='ql_key', LS_CACHE='ql_cache_v32', LS_OUTBOX='ql_outbox_v1';
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
@@ -408,6 +408,14 @@ function saveFailed(){lsSet(LS_FAILED,JSON.stringify(failed))}
 function setLastErr(o){lastErr=o;lsSet(LS_LASTERR,JSON.stringify(o))}
 /* 送信拒否の連続回数(メモリのみ。再読込で0に戻る。3回目で保留へ退避する一時カウンタなので消えても実害はない) */
 const opFailCount={};
+/* v71: 場所の追加候補は人物名簿と分けて、このブラウザに保存する。 */
+const LS_PLACES='ql_places_v1';
+let customPlaces=[];
+try{const p=JSON.parse(lsGet(LS_PLACES)||'[]');if(Array.isArray(p))customPlaces=p.filter(v=>typeof v==='string'&&v.trim()).map(v=>v.trim())}catch(e){}
+/* エラー履歴と現在の通信状態を分け、別の処理の成功で失敗表示を消さない。 */
+const syncIssues={};
+let fetching=false,lastPostOk=0;
+const REQUEST_TIMEOUT_MS=20000,PHOTO_TIMEOUT_MS=60000;
 /* ---- 写真の送信待ち(v65)。記録本体とは別レーンにして、写真の失敗が記録の同期を止めないようにする ---- */
 const LS_IMGBOX='ql_imgbox_v1';
 let imgbox=[];try{imgbox=JSON.parse(lsGet(LS_IMGBOX)||'[]')||[]}catch(e){imgbox=[]}
@@ -417,16 +425,16 @@ let imgFlushing=false;
 async function imgFlush(){
   if(imgFlushing||!imgbox.length||!apiKey)return;
   imgFlushing=true;
-  while(imgbox.length){
-    const op=imgbox[0];
-    try{
-      const res=await fetch(GAS_URL,{method:'POST',body:JSON.stringify({key:apiKey,action:'imgup',id:op.id,data:op.data})});
-      const j=await res.json();
-      if(j&&j.ok){imgbox.shift();saveImgbox();updStat()}
-      else break; /* GAS未対応・エラー時はここで止め、30秒ごとに自動再送 */
-    }catch(e){break}
-  }
-  imgFlushing=false;updStat();
+  try{
+    while(imgbox.length&&apiKey){
+      const op=imgbox[0],key=apiKey;
+      const r=await requestJson(GAS_URL,{method:'POST',body:JSON.stringify({key:key,action:'imgup',id:op.id,data:op.data})},PHOTO_TIMEOUT_MS);
+      if(key!==apiKey)break;
+      if(r.kind!=='ok'){recordSyncIssue('photo',r);break}
+      imgbox.shift();saveImgbox();lastPostOk=Date.now();delete syncIssues.photo;updStat();
+    }
+  }catch(e){recordSyncIssue('photo',{kind:'client'})}
+  finally{imgFlushing=false;updStat()}
 }
 const photoCache={}; /* 表示用: 取得済み写真(このセッションの間だけ記憶) */
 let photoData={};    /* 選んだ直後の写真(送信前プレビュー用) */
@@ -436,11 +444,8 @@ async function loadPhoto(id){
   const pend=imgbox.find(o=>o.id===id);
   if(pend)return pend.data;
   if(!apiKey)return null;
-  try{
-    const res=await fetch(GAS_URL+'?key='+encodeURIComponent(apiKey)+'&img='+encodeURIComponent(id));
-    const j=await res.json();
-    if(j&&j.ok&&j.data){photoCache[id]=j.data;return j.data}
-  }catch(e){}
+  const r=await requestJson(GAS_URL+'?key='+encodeURIComponent(apiKey)+'&img='+encodeURIComponent(id),{},PHOTO_TIMEOUT_MS);
+  if(r.kind==='ok'&&r.j.data){photoCache[id]=r.j.data;return r.j.data}
   return null;
 }
 function uid(){return 'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
@@ -658,35 +663,73 @@ function migrate(){
 }
 /* v67: 通信状態の日本語表示。flush/fetchAllの両方が参照する実体(存在しないとReferenceErrorで同期が完全に止まる) */
 const STATUS_TEXT={
-  network:'接続不可(ブロック/圏外?)',
-  login:'ログイン要求',
-  html:'受け皿エラー(応答不正)',
-  badbody:'受け皿エラー(応答不正)',
-  notfound:'URL無効(404)'
+  network:'通信できません（接続先・通信設定を確認）',
+  timeout:'応答待ちが時間切れになりました（再試行できます）',
+  login:'接続先でログインが必要です',
+  html:'接続先からデータ以外の応答がありました',
+  badbody:'接続先の応答を確認できません',
+  notfound:'接続先から404が返りました（再試行できます）',
+  forbidden:'接続先へのアクセスが拒否されました（403）',
+  busy:'接続先が混み合っています（429）',
+  server:'接続先でエラーが起きています',
+  http:'通信エラー',unauthorized:'合言葉エラー',
+  client:'アプリ内の処理でエラーが起きました'
 };
-/* v67: fetch()の応答を安全に判定する共通処理。ここでは投げない(呼び出し側のtry/catchを素通りさせる設計) */
+function safeSyncReason(value,key=apiKey){
+  let t=String(value||'').replace(/https?:\/\/[^\s<>"']+/gi,'[接続先]');
+  if(key){t=t.split(key).join('[非表示]').split(encodeURIComponent(key)).join('[非表示]')}
+  return t.slice(0,120);
+}
+function syncIssueText(r){
+  if(r.kind==='rejected')return '受け皿拒否'+(r.snippet?': '+r.snippet:'');
+  return (STATUS_TEXT[r.kind]||STATUS_TEXT.badbody)+((r.kind==='server'||r.kind==='http')&&r.status?'（'+r.status+'）':'');
+}
+function recordSyncIssue(channel,r){
+  const o={kind:r.kind,status:r.status||0,snippet:safeSyncReason(r.snippet),when:Date.now(),channel:channel};
+  syncIssues[channel]=o;setLastErr(o);
+}
 async function readJson(res){
-  if(res.status===404)return{kind:'notfound',j:null,status:res.status,snippet:'',host:''};
-  let text='';
-  try{text=await res.text()}catch(e){return{kind:'badbody',j:null,status:res.status,snippet:'',host:''}}
-  const host=((res.url||GAS_URL).match(/^https?:\/\/([^/]+)/)||[])[1]||'';
-  if(/^\s*</.test(text))return{kind:'html',j:null,status:res.status,snippet:text.slice(0,120),host:host};
-  /* クロスオリジンのログイン誘導は、実際にはResponseが得られる前にfetch()がTypeErrorで落ちることが多く、
-     この分岐が発火するのは稀(ベストエフォート判定)。それでも判定できる場合のために残す */
-  if(/accounts\.google\.com/.test(text)||/accounts\.google\.com/.test(res.url||''))return{kind:'login',j:null,status:res.status,snippet:text.slice(0,120),host:host};
-  let j=null;
-  try{j=JSON.parse(text)}catch(e){return{kind:'badbody',j:null,status:res.status,snippet:text.slice(0,120),host:host}}
-  if(j&&j.ok)return{kind:'ok',j:j,status:res.status,snippet:'',host:host};
-  if(j&&j.error==='unauthorized')return{kind:'unauthorized',j:j,status:res.status,snippet:'',host:host};
-  return{kind:'rejected',j:j,status:res.status,snippet:String((j&&j.error)||'').slice(0,120),host:host};
+  const base={j:null,status:res.status,snippet:''};
+  /* HTTP失敗は本文のok値より優先。通信失敗で記録を「保留」に移さない。 */
+  if(!res.ok){
+    const kind=res.status===404?'notfound':res.status===403?'forbidden':res.status===429?'busy':res.status>=500?'server':'http';
+    return Object.assign(base,{kind:kind});
+  }
+  const text=await res.text();
+  /* 転送がブラウザに遮断された場合はResponse自体が得られずnetworkになる。 */
+  if(/accounts\.google\.com/.test(res.url||'')||(/^\s*</.test(text)&&/accounts\.google\.com/.test(text)))return Object.assign(base,{kind:'login'});
+  if(/^\s*</.test(text))return Object.assign(base,{kind:'html'});
+  let j;try{j=JSON.parse(text)}catch(e){return Object.assign(base,{kind:'badbody'})}
+  if(j&&j.ok===true)return Object.assign(base,{kind:'ok',j:j});
+  if(j&&j.error==='unauthorized')return Object.assign(base,{kind:'unauthorized'});
+  if(j&&j.ok===false&&typeof j.error==='string'&&j.error.trim())return Object.assign(base,{kind:'rejected',snippet:safeSyncReason(j.error)});
+  return Object.assign(base,{kind:'badbody'});
+}
+/* fetchだけでなく応答本文の読み取りにも制限時間を設ける。
+   Content Serviceの一時的な転送先をキャッシュから再利用しない。 */
+async function requestJson(url,options={},timeoutMs=REQUEST_TIMEOUT_MS){
+  const controller=new AbortController();let timer;
+  try{
+    const timeout=new Promise(resolve=>{timer=setTimeout(()=>{
+      resolve({kind:'timeout',status:0,snippet:''});controller.abort();
+    },timeoutMs)});
+    const request=(async()=>{
+      try{return await readJson(await fetch(url,Object.assign({},options,{cache:'no-store',signal:controller.signal})))}
+      catch(e){return {kind:'network',status:0,snippet:''}}
+    })();
+    return await Promise.race([request,timeout]);
+  }finally{clearTimeout(timer)}
 }
 function updStat(msg){
   const el=document.getElementById('syncStat');if(!el)return;
   const n=outbox.length+imgbox.length;
-  const t=msg||(n?('送信待ち '+n+'件'+(imgbox.length?'(うち写真'+imgbox.length+')':'')):(failed.length?('保留 '+failed.length+'件'):'同期済み'));
-  el.textContent=t;
-  const warn=/オフライン|送信待ち|未接続|違います|エラー|要求|保留|無効|拒否|不可/.test(t);
-  el.style.color=warn?'#E05656':'#3FCF8E';
+  const issues=Object.values(syncIssues).sort((a,b)=>b.when-a.when);
+  const counts=[n?'送信待ち '+n+'件'+(imgbox.length?'（うち写真'+imgbox.length+'件）':''):'',failed.length?'保留 '+failed.length+'件':''].filter(Boolean).join(' / ');
+  const current=issues.length?syncIssueText(issues[0]):(fetching?'読込中…':(!apiKey?'未接続':(!lastFetchOk?'受信確認待ち':'')));
+  el.textContent=msg||[current,counts].filter(Boolean).join(' / ')||'同期済み';
+  el.style.color=(msg&&msg!=='同期済み')||issues.length||n||failed.length||!apiKey?'#E05656':'#3FCF8E';
+  const panel=document.getElementById('syncOverlay');
+  if(panel&&panel.classList.contains('open'))renderSyncPanel();
 }
 let flushing=false;
 function enqueue(op,defer){outbox.push(op);saveLocal();updStat();if(!defer)flush()}
@@ -701,47 +744,28 @@ function opKey(op){
 async function flush(){
   if(flushing||!outbox.length||!apiKey)return;
   flushing=true;
-  /* v67 round2: breakの直後にfinallyの無引数updStat()が同一tickで上書きしてしまい、
-     受け皿拒否等の個別メッセージが一度も表示されない不具合の修正。個別メッセージを出した回はfinallyでの再描画を省く */
-  let statusSet=false;
-  /* v67 round3: 保留庫に何か既にある状態(failed.length>0)で別の1件が閾値未満で拒否されると、
-     「受け皿拒否」個別メッセージが件数表示を覆い隠したまま固定される不具合の修正(呼び出しをまたいでも再現)。
-     failed が空の間だけ個別メッセージの固定を許可し、既に何か保留済みなら件数表示を優先する */
   try{
-    while(outbox.length){
-      const op=outbox[0];
-      let res;
-      try{
-        res=await fetch(GAS_URL,{method:'POST',body:JSON.stringify(Object.assign({key:apiKey},op))});
-      }catch(e){
-        setLastErr({kind:'network',snippet:'',when:Date.now()});
-        updStat(STATUS_TEXT.network);
-        statusSet=true;
-        break;
+    while(outbox.length&&apiKey){
+      const op=outbox[0],sentKey=apiKey,key=opKey(op);
+      const r=await requestJson(GAS_URL,{method:'POST',body:JSON.stringify(Object.assign({key:sentKey},op))});
+      if(sentKey!==apiKey)break;
+      if(r.kind==='ok'){
+        outbox.shift();saveLocal();delete opFailCount[key];delete syncIssues.send;
+        lastPostOk=Date.now();updStat();continue;
       }
-      const r=await readJson(res);
-      if(r.kind==='ok'){outbox.shift();saveLocal();updStat();continue}
-      setLastErr({kind:r.kind,snippet:r.snippet,when:Date.now()});
-      if(r.kind==='unauthorized'){updStat('合言葉エラー');statusSet=true;break}
+      recordSyncIssue('send',r);
       if(r.kind==='rejected'){
-        const key=opKey(op);
         opFailCount[key]=(opFailCount[key]||0)+1;
         if(opFailCount[key]>=3){
-          /* 3回拒否: 保留庫に退避してoutboxの先頭を進める(resend-stormでの重複を避けるため同じキーの既存分は入れ替える) */
           failed=failed.filter(f=>opKey(f.op)!==key);
           failed.push({op:op,reason:r.snippet,when:Date.now(),tries:3});
-          outbox.shift();saveLocal();saveFailed();updStat();
-          continue;
+          outbox.shift();saveLocal();saveFailed();delete opFailCount[key];delete syncIssues.send;updStat();continue;
         }
-        updStat('受け皿拒否: '+r.snippet);
-        if(!failed.length)statusSet=true;
-        break;
-      }
-      updStat(STATUS_TEXT[r.kind]||'受け皿エラー(応答不正)');
-      statusSet=true;
+      }else{delete opFailCount[key]}
       break;
     }
-  }finally{flushing=false;if(!statusSet)updStat()}
+  }catch(e){recordSyncIssue('send',{kind:'client'})}
+  finally{flushing=false;updStat()}
 }
 const OTHER_LABEL={engage:'区分',source:'経路',souzoku:'相続・家族',genen:'減塩',floors:'階段',tsumiWhat:'積立対象',tsumiAmt:'積立額',pieces:'片付け',scope:'守備範囲',delegate:'依頼先',kyodo:'共同',introducers:'紹介者',start:'開始',end:'終了',ktype:'区分',gtype:'区分',biz:'業務',bizs:'業務',htype:'形態',kkind:'後見種別',startd:'契約・審判日',kyoka_no:'建設許可番号',sanpai:'産廃満了',sanpai_no:'産廃許可番号',takken_no:'宅建免許番号',kaishi:'開始審判日',keiyakubi:'契約日',taisaku:'対策',kaigyo:'開業日',takken:'宅建業満了',takkenshi:'宅建士証満了',toritsugi:'申請取次満了',zairyu:'在留資格',zexp:'在留満了',kessan:'決算月日',kazei:'消費税',kyoka:'許可満了',koken:'後見',bday:'誕生日',dl:'手動期限',budget:'金額',area:'エリア',zoning:'用途地域',size:'広さ・坪数',youto:'用途',idea:'対策',free:'自由記述',deal:'売買',prio:'区分',anken:'案件',est:'設立日',fiscal:'決算期',capital:'資本金',shares:'株式数',permits:'許認可',aoiro:'申告',kazei:'消費税',honsoku:'課税方式',sales1:'売上2期前',sales2:'売上前期',sales3:'売上当期予想',bd1:'誕生日①',bd2:'誕生日②',bd3:'誕生日③',ng1:'年賀状①',ng2:'年賀状②',ng3:'年賀状③',sm1:'暑中①',sm2:'暑中②',sm3:'暑中③'};
 function oLabel(f){return OTHER_LABEL[f.k]||String(f.label||f.k).replace(/[(（].*$/,'').trim()}
@@ -839,25 +863,30 @@ function cfgSync(){
     enqueue({action:'config',name:'recent',value:recentPeople});
   },1200);
 }
-let fetchRetry=0,fetchTimer=null,lastFetchOk=0;
-async function fetchAll(){
-  if(!apiKey)return;
-  updStat('読込中…');
+let fetchRetry=0,fetchTimer=null,lastFetchOk=0,fetchInFlight=null;
+function fetchAll(){
+  if(!apiKey)return Promise.resolve();
+  if(fetchInFlight)return fetchInFlight;
+  clearTimeout(fetchTimer);fetchTimer=null;
+  fetching=true;updStat();
+  fetchInFlight=fetchAllOnce(apiKey).finally(()=>{fetchInFlight=null;fetching=false;updStat()});
+  return fetchInFlight;
+}
+async function fetchAllOnce(requestKey){
+  let failure=null;
   try{
-    let res;
-    try{
-      res=await fetch(GAS_URL+'?key='+encodeURIComponent(apiKey));
-    }catch(e){
-      /* v67 round2: 生のfetch()例外(オフライン・ブロック等)もflush()同様にkind:'network'として記録する。
-         これが無いとcold load直後は外側catchのlastErrが常にnullで、汎用文言にしかならなかった */
-      setLastErr({kind:'network',snippet:'',when:Date.now()});
-      throw e;
+    const r=await requestJson(GAS_URL+'?key='+encodeURIComponent(requestKey));
+    if(requestKey!==apiKey)return;
+    if(r.kind==='unauthorized'){
+      recordSyncIssue('read',r);apiKey='';lsSet(LS_KEY,'');
+      showKeyScreen('合言葉が違います。もう一度入力してください');return;
     }
-    const r=await readJson(res);
-    if(r.kind==='unauthorized'){apiKey='';lsSet(LS_KEY,'');showKeyScreen('合言葉が違います。もう一度入力してください');updStat('未接続');return}
-    if(r.kind!=='ok'){setLastErr({kind:r.kind,snippet:r.snippet,when:Date.now()});throw new Error('fetchAll:'+r.kind)}
+    if(r.kind!=='ok'){failure=r;throw new Error('sync response')}
     const j=r.j;
-    let sv=j.entries||[];
+    if(!Array.isArray(j.entries)||j.entries.some(en=>!en||!en.id||!en.data||typeof en.data!=='object'||Array.isArray(en.data))){
+      failure={kind:'badbody'};throw new Error('sync data');
+    }
+    let sv=j.entries.slice();
     const localPrev=entries.slice();
     let resend=false;
     /* 空サーバ保護: シート作り直し直後は手元の記録を正として自動復元する */
@@ -892,10 +921,11 @@ async function fetchAll(){
     renderTabs();
     if(!formBusy())renderFields();
     renderTimeline();
-    fetchRetry=0;lastFetchOk=Date.now();
+    fetchRetry=0;lastFetchOk=Date.now();delete syncIssues.read;
     updStat();flush();
   }catch(e){
-    updStat((lastErr&&STATUS_TEXT[lastErr.kind])||'オフライン(前回データを表示中)');
+    if(requestKey!==apiKey)return;
+    recordSyncIssue('read',failure||{kind:'client'});updStat();
     /* 自動リトライ: 3秒→8秒→20秒→45秒の4回まで粘る */
     if(fetchRetry<4){
       fetchRetry++;
@@ -918,12 +948,16 @@ function closeSyncPanel(){document.getElementById('syncOverlay').classList.remov
 function renderSyncPanel(){
   const b=document.getElementById('syncPanelBody');if(!b)return;
   const lines=[];
-  lines.push('バージョン: '+esc(APP_VER));
-  lines.push('最終受信成功: '+esc(fmtWhen(lastFetchOk)));
+  lines.push('バージョン: '+APP_VER);
+  lines.push('現在の状態: '+document.getElementById('syncStat').textContent);
+  lines.push('最終受信成功（今回起動後）: '+fmtWhen(lastFetchOk));
+  lines.push('最終送信成功（今回起動後）: '+fmtWhen(lastPostOk));
+  lines.push('通信の待ち時間: 通常20秒、写真60秒。時間切れ後も未送信データは残ります。');
+  Object.entries(syncIssues).forEach(([ch,r])=>lines.push(({read:'受信',send:'送信',photo:'写真送信'}[ch]||ch)+': '+syncIssueText(r)));
   lines.push('送信待ち: '+outbox.length+'件(写真'+imgbox.length+'件)');
   lines.push('保留(3回拒否): '+failed.length+'件');
-  if(lastErr)lines.push('直近のエラー: '+esc(STATUS_TEXT[lastErr.kind]||lastErr.kind)+(lastErr.snippet?'('+esc(lastErr.snippet)+')':'')+' '+esc(fmtWhen(lastErr.when)));
-  else lines.push('直近のエラー: なし');
+  if(lastErr)lines.push('過去のエラー履歴（現在の状態とは別）: '+syncIssueText(lastErr)+' '+fmtWhen(lastErr.when));
+  else lines.push('過去のエラー履歴: なし');
   if(failed.length){
     lines.push('');
     lines.push('--- 保留一覧 ---');
@@ -952,7 +986,7 @@ function syncExport(){
 }
 function syncRetryFailed(i){
   const f=failed[i];if(!f)return;
-  failed.splice(i,1);
+  failed.splice(i,1);delete opFailCount[opKey(f.op)];
   outbox.unshift(f.op);
   saveLocal();saveFailed();updStat();
   flush();
@@ -963,22 +997,25 @@ function showKeyScreen(msg){
   document.getElementById('keyOverlay').classList.add('open');
   setTimeout(()=>{const i=document.getElementById('keyInput');i.focus()},80);
 }
+let checkingKey=false;
 async function submitKey(){
   const v=document.getElementById('keyInput').value.trim();
-  if(!v)return;
+  if(!v||checkingKey)return;
+  checkingKey=true;
   document.getElementById('keyMsg').textContent='確認中…';
   try{
-    const res=await fetch(GAS_URL+'?key='+encodeURIComponent(v));
-    const j=await res.json();
-    if(j&&j.ok){
-      apiKey=v;lsSet(LS_KEY,v);
+    const r=await requestJson(GAS_URL+'?key='+encodeURIComponent(v));
+    if(r.kind==='ok'){
+      apiKey=v;lsSet(LS_KEY,v);delete syncIssues.read;
       document.getElementById('keyOverlay').classList.remove('open');
-      toast('接続しました');
+      toast('接続しました');fetchRetry=0;
+      if(fetchInFlight)await fetchInFlight;
       fetchAll();
     }else{
-      document.getElementById('keyMsg').textContent='合言葉が違います';
+      r.snippet=safeSyncReason(r.snippet,v);
+      document.getElementById('keyMsg').textContent=r.kind==='unauthorized'?'合言葉が違います':syncIssueText(r);
     }
-  }catch(e){document.getElementById('keyMsg').textContent='通信できません。電波を確認してください'}
+  }finally{checkingKey=false}
 }
 document.addEventListener('keydown',function(e){
   const ko=document.getElementById('keyOverlay');
@@ -1400,6 +1437,27 @@ function selButtonsHTML(fd){
   let h=fd.options.map(o=>`<button data-v="${escAttr(o)}" onclick="setSel('${fd.k}','${escAttr(o)}')">${esc((fd.labels&&fd.labels[o])||o)}</button>`).join('');
   return h;
 }
+function placeOptionsHTML(fd,value){
+  const used=entries.filter(en=>en.cat==='gyosei').map(en=>(en.data||{})[fd.k]);
+  const options=[...new Set(['',...(fd.options||[]),...customPlaces,...used.filter(v=>typeof v==='string'&&v),...(value?[value]:[])])];
+  return options.map(o=>`<option value="${escAttr(o)}"${value===o?' selected':''}>${esc(o||'場所を選択')}</option>`).join('');
+}
+function addPlace(k){
+  const cat=activeCat,fd=catFields(cat).find(f=>f.k===k&&f.type==='place');
+  if(!fd)return;
+  askText('新しい場所の名前','',value=>{
+    if(activeCat!==cat)return;
+    const el=document.getElementById('f_'+k);if(!el)return;
+    const next=[...new Set([...customPlaces,value])];
+    try{localStorage.setItem(LS_PLACES,JSON.stringify(next))}
+    catch(e){toast('場所を保存できませんでした。ブラウザの空き容量を確認してください');return}
+    customPlaces=next;
+    /* この欄だけ更新し、内容・日付・案件などの入力途中の値を保つ。 */
+    el.innerHTML=placeOptionsHTML(fd,value);el.value=value;
+    el.dispatchEvent(new Event('change',{bubbles:true}));saveDraft();
+    toast('場所を追加しました');
+  });
+}
 function fieldHTML(fd,vals){
   const v=vals[fd.k];
   const wrap=(inner)=>`<div class="field" id="w_${fd.k}"><label>${fd.label}${fd.hint?` <span style="letter-spacing:0;color:#A9AFB9">— ${fd.hint}</span>`:''}</label>${inner}</div>`;
@@ -1414,9 +1472,7 @@ function fieldHTML(fd,vals){
     case 'person':return wrap(`<button class="personbtn ${v?'':'empty'}" id="f_${fd.k}" onclick="openPicker('f_${fd.k}','${fd.label}')">${esc(v||'')}</button>`);
     case 'ankenlink':return wrap(`<button class="personbtn ${v?'':'empty'}" id="f_${fd.k}" onclick="openAnkenPicker('${fd.k}')">${esc(v||'')}</button>`);
     case 'place':{
-      /* 場所は人物名簿と分ける。保存済みの値も候補に残し、編集時に失わない。 */
-      const options=[...new Set(['',...(fd.options||[]),...(v?[v]:[])])];
-      return wrap(`<select class="ddsel" id="f_${fd.k}" aria-label="${escAttr(fd.label)}">${options.map(o=>`<option value="${escAttr(o)}"${(v||'')===o?' selected':''}>${esc(o||'場所を選択')}</option>`).join('')}</select>`);
+      return wrap(`<select class="ddsel" id="f_${fd.k}" aria-label="${escAttr(fd.label)}">${placeOptionsHTML(fd,v||'')}</select><button type="button" class="dladd" style="margin-top:8px" onclick="addPlace('${fd.k}')">＋ 場所を追加</button>`);
     }
     case 'bukkenlink':return wrap(`<button class="personbtn ${v?'':'empty'}" id="f_${fd.k}" onclick="openBukkenPicker('${fd.k}')">${esc(v||'')}</button>`);
     case 'date6o':return wrap(`<input type="text" class="date6 num" id="f_${fd.k}" inputmode="numeric" maxlength="6" placeholder="未入力" value="${escAttr(v||'')}">`);
