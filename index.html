@@ -4,11 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Quicklog</title>
+<!-- v73: favicon(角丸四角+文字L、他アプリ(ClaudeMemory等)と同じ形・字体に合わせる) -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2064%2064%22%3E%3Crect%20x%3D%224%22%20y%3D%224%22%20width%3D%2256%22%20height%3D%2256%22%20rx%3D%2212%22%20fill%3D%22%23C9B48A%22%2F%3E%3Ctext%20x%3D%2232%22%20y%3D%2233%22%20text-anchor%3D%22middle%22%20dominant-baseline%3D%22central%22%20font-family%3D%22%27Segoe%20UI%27%2C%20Arial%2C%20sans-serif%22%20font-weight%3D%22700%22%20font-size%3D%2236%22%20fill%3D%22%231B2333%22%3EL%3C%2Ftext%3E%3C%2Fsvg%3E">
 <meta name="theme-color" content="#F4F5F2">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Quicklog">
 <style>
+/* ベージュの色はこの3行だけ変えればよい */
 :root{
   --ink:#232A35;
   --paper:#F4F5F2;
@@ -17,7 +20,10 @@
   --sub:#78808F;
   --focus:#2F5FA8;
   --danger:#A84A3B;
-  --ok:#2F7A50;
+  --beige:#C9B48A;
+  --beige-strong:#A89060;
+  --beige-soft:#E8DCC4;
+  --ok:var(--beige-strong); /* v73: 緑→ベージュ。成功・入金・完了系はすべてこの変数経由 */
   --radius:10px;
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
@@ -242,16 +248,47 @@ textarea.edit-content{height:calc(15em + 20px);min-height:calc(15em + 20px);line
 .detail-actions button{flex:1 1 40%;border:1px solid var(--line);background:#F6F7F5;border-radius:8px;padding:11px;font-size:.88rem;cursor:pointer;font-family:inherit;color:var(--ink)}
 .detail-actions button.danger{color:var(--danger);border-color:#E5C9C9}
 
-#toast{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:#2E9E6B;color:#fff;padding:14px 26px;border-radius:14px;font-size:.92rem;opacity:0;pointer-events:none;transition:opacity .2s;z-index:100;max-width:92vw;text-align:center}
+#toast{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(232,220,196,.72);color:#4A3418;border:1px solid rgba(168,144,96,.55);box-shadow:0 3px 14px rgba(0,0,0,.10);text-shadow:0 1px 1px #fff,0 -1px 1px #fff,1px 0 1px #fff,-1px 0 1px #fff;padding:14px 26px;border-radius:14px;font-size:.92rem;font-weight:600;opacity:0;pointer-events:none;transition:opacity .2s;z-index:100;width:max-content;max-width:92vw;text-align:center}
 #toast.show{opacity:1}
-#toast.err{background:var(--danger)}
+#toast.err{background:rgba(255,228,223,.58);color:#772B22;border-color:rgba(168,74,51,.55)}
 @media (prefers-reduced-motion:reduce){#toast{transition:none}}
+
+/* v73: 整理パネル(右カラム/引き出し)・1400px以上での2カラムレイアウト */
+#organizeToggle{border:1px solid var(--line);background:var(--card);border-radius:8px;padding:5px 12px;font-size:.78rem;cursor:pointer;color:var(--ink);font-family:inherit;flex:0 0 auto;align-self:center}
+.org-sec{margin-bottom:18px}
+.org-sec:last-child{margin-bottom:4px}
+.org-h{font-size:.76rem;font-weight:700;color:var(--sub);letter-spacing:.06em;margin-bottom:8px}
+.org-stats{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.org-stat{border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--card)}
+.org-stat b{display:block;font-size:1.2rem;line-height:1.3;font-family:inherit}
+.org-stat span{font-size:.66rem;color:var(--sub)}
+.org-hint{font-size:.64rem;color:var(--sub);margin-top:6px}
+.org-row{display:flex;justify-content:space-between;align-items:center;gap:8px;border:1px solid var(--line);border-radius:8px;padding:7px 10px;margin-bottom:6px;background:var(--card);font-size:.82rem}
+.org-row.on{border-color:var(--beige-strong);background:var(--beige-soft)}
+.org-row .org-n{font-weight:700;color:var(--sub);font-size:.74rem;flex:0 0 auto;white-space:nowrap}
+.org-row .org-t{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.org-empty{font-size:.8rem;color:var(--sub);padding:4px 2px 10px}
+.org-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:.74rem}
+.org-bar-row .org-bar-lbl{flex:0 0 32px;color:var(--sub)}
+.org-bar-row .org-bar-track{flex:1;background:var(--line);border-radius:4px;height:11px;overflow:hidden}
+.org-bar-row .org-bar-fill{background:var(--beige-strong);height:100%;display:block}
+.org-bar-row.on .org-bar-fill{background:var(--focus)}
+.org-bar-row .org-bar-n{flex:0 0 22px;text-align:right;color:var(--sub)}
+@media(min-width:1400px){
+  body{display:flex;justify-content:center;align-items:flex-start;gap:22px;padding:16px 16px 40px}
+  .wrap{margin:0}
+  #organizeToggle{display:none}
+  #organizeOverlay{position:static;display:block;inset:auto;background:none;z-index:auto;padding:0;flex:0 0 360px}
+  #organizeOverlay .sheet{position:sticky;top:16px;width:360px;max-width:360px;max-height:calc(100vh - 32px);border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);border:1px solid var(--line);margin:0}
+  #organizeCloseBtn{display:none}
+}
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <div class="logo">QUICKLOG<span class="ver" id="appVer"></span><button type="button" id="syncStat" onclick="openSyncPanel()">起動中…</button></div>
+    <button type="button" id="organizeToggle" onclick="toggleOrganizePanel()">整理 ▸</button>
   </header>
 
   <div class="tabs" id="tabs"></div>
@@ -281,6 +318,14 @@ textarea.edit-content{height:calc(15em + 20px);min-height:calc(15em + 20px);line
   </div>
 
   <div class="timeline" id="timeline"></div>
+</div>
+
+<!-- 整理パネル(v73: 1400px以上は右カラム常時表示、未満は「整理」ボタンで開閉する引き出し) -->
+<div class="overlay" id="organizeOverlay" onclick="if(event.target===this)closeOrganizePanel()">
+  <div class="sheet">
+    <h3><span>整理パネル</span><button class="closebtn" id="organizeCloseBtn" onclick="closeOrganizePanel()">×</button></h3>
+    <div id="organizePanel"></div>
+  </div>
 </div>
 
 <!-- 人物ピッカー -->
@@ -376,6 +421,23 @@ textarea.edit-content{height:calc(15em + 20px);min-height:calc(15em + 20px);line
     <textarea id="syncExportArea" readonly style="display:none;width:100%;height:120px;margin-bottom:10px;font-size:.72rem"></textarea>
     <div id="syncFailedBtns" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
     <div class="dbtns"><button class="primary" onclick="syncRetryNow()">今すぐ再送</button><button onclick="syncExport()">書き出す</button><button onclick="closeSyncPanel()">閉じる</button></div>
+    <div class="dbtns" style="margin-top:6px"><button onclick="endpointOpen()">接続先URLを設定</button></div>
+  </div>
+</div>
+
+<!-- 接続先URL設定(v73: 404対策。GASの再デプロイでURLが変わった時に画面から貼り替える) -->
+<div class="dlg-overlay" id="endpointOverlay">
+  <div class="dlg">
+    <div class="dt">接続先URLを設定<br><span style="font-weight:400;font-size:.8rem;color:var(--sub)">保存先(Google Apps Script)のURLです。保存すると、データを送らない読み取り確認を1回行います。</span></div>
+    <div style="font-size:.7rem;color:var(--sub);letter-spacing:.08em;margin-bottom:3px">現在のURL</div>
+    <div id="endpointCurrent" style="font-size:.75rem;word-break:break-all;margin-bottom:12px;color:var(--ink)"></div>
+    <input type="text" id="endpointInput" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+    <div style="font-size:.78rem;margin-bottom:10px" id="endpointMsg"></div>
+    <div class="dbtns">
+      <button onclick="endpointClose()">閉じる</button>
+      <button onclick="endpointResetToDefault()">既定に戻す</button>
+      <button class="primary" onclick="endpointSave()">保存</button>
+    </div>
   </div>
 </div>
 
@@ -393,11 +455,23 @@ textarea.edit-content{height:calc(15em + 20px);min-height:calc(15em + 20px);line
 const PALETTE=['#3B6FB5','#7B5EA7','#5F7F5F','#9E5E8A','#A84A3B','#4E6E9E','#8A7A3B','#2E8B8B','#3E8E5F','#C08427','#B05A6E'];
 
 /* =============== 同期レイヤー(GAS+スプレッドシート) =============== */
-const GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
-const APP_VER='v71';
+const DEFAULT_GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
+const APP_VER='v73';
 const LS_KEY='ql_key', LS_CACHE='ql_cache_v32', LS_OUTBOX='ql_outbox_v1';
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
+/* v73: 404対策。GASの再デプロイでURLが変わった場合に、画面から接続先を貼り替えられるようにする。
+   既定値はコード内蔵、上書き値はこの端末のlocalStorageにだけ保存する。 */
+const LS_ENDPOINT='quicklog.endpoint';
+function isValidGasUrl(u){
+  if(typeof u!=='string')return false;
+  const t=u.trim();
+  return /^https:\/\/script\.google\.com\//.test(t)&&/\/exec$/.test(t);
+}
+let GAS_URL=(function(){
+  const v=lsGet(LS_ENDPOINT);
+  return (v&&isValidGasUrl(v))?v.trim():DEFAULT_GAS_URL;
+})();
 let apiKey=lsGet(LS_KEY)||'';
 let outbox=[];try{outbox=JSON.parse(lsGet(LS_OUTBOX)||'[]')||[]}catch(e){outbox=[]}
 /* ---- v67: 3回拒否された送信を「保留」に退避する仕組み ---- */
@@ -668,7 +742,7 @@ const STATUS_TEXT={
   login:'接続先でログインが必要です',
   html:'接続先からデータ以外の応答がありました',
   badbody:'接続先の応答を確認できません',
-  notfound:'接続先から404が返りました（再試行できます）',
+  notfound:'接続先から404が返りました。Google側の一時的な不調のことが多いので、少し待って再試行してください。何度も続くときだけ、同期状態の「接続先URLを設定」でURLを確認してください（再試行できます）',
   forbidden:'接続先へのアクセスが拒否されました（403）',
   busy:'接続先が混み合っています（429）',
   server:'接続先でエラーが起きています',
@@ -727,7 +801,7 @@ function updStat(msg){
   const counts=[n?'送信待ち '+n+'件'+(imgbox.length?'（うち写真'+imgbox.length+'件）':''):'',failed.length?'保留 '+failed.length+'件':''].filter(Boolean).join(' / ');
   const current=issues.length?syncIssueText(issues[0]):(fetching?'読込中…':(!apiKey?'未接続':(!lastFetchOk?'受信確認待ち':'')));
   el.textContent=msg||[current,counts].filter(Boolean).join(' / ')||'同期済み';
-  el.style.color=(msg&&msg!=='同期済み')||issues.length||n||failed.length||!apiKey?'#E05656':'#3FCF8E';
+  el.style.color=(msg&&msg!=='同期済み')||issues.length||n||failed.length||!apiKey?'#E05656':'var(--beige-strong)'; /* v73: 緑→ベージュ(エラー赤は変更なし) */
   const panel=document.getElementById('syncOverlay');
   if(panel&&panel.classList.contains('open'))renderSyncPanel();
 }
@@ -1021,6 +1095,64 @@ document.addEventListener('keydown',function(e){
   const ko=document.getElementById('keyOverlay');
   if(ko&&ko.classList.contains('open')&&e.key==='Enter')submitKey();
 });
+
+/* v73: 接続先URL(GASのexec URL)を画面から貼り替える。データは送らない読み取り確認を1回行う */
+function endpointOpen(){
+  document.getElementById('endpointCurrent').textContent=GAS_URL;
+  document.getElementById('endpointInput').value=GAS_URL;
+  const m=document.getElementById('endpointMsg');m.textContent='';m.style.color='var(--sub)';
+  closeSyncPanel();
+  document.getElementById('endpointOverlay').classList.add('open');
+}
+function endpointClose(){document.getElementById('endpointOverlay').classList.remove('open')}
+async function endpointCheck(url){
+  return await requestJson(url+(apiKey?('?key='+encodeURIComponent(apiKey)):''));
+}
+async function endpointSave(){
+  const input=document.getElementById('endpointInput');
+  const m=document.getElementById('endpointMsg');
+  const v=(input.value||'').trim();
+  if(!isValidGasUrl(v)){
+    m.style.color=getComputedStyle(document.documentElement).getPropertyValue('--danger');
+    m.textContent='URLの形式が正しくありません(https://script.google.com/ で始まり /exec で終わる形式にしてください)';
+    return;
+  }
+  m.style.color='var(--sub)';m.textContent='確認中…';
+  const prev=GAS_URL;
+  GAS_URL=v;
+  const r=await endpointCheck(GAS_URL);
+  if(r.kind==='ok'||r.kind==='unauthorized'){
+    lsSet(LS_ENDPOINT,v);
+    document.getElementById('endpointCurrent').textContent=GAS_URL;
+    m.style.color='var(--sub)';
+    m.textContent='接続を確認しました。保存しました。';
+    toast('接続先URLを保存しました');
+    delete syncIssues.read;fetchRetry=0;updStat();
+    if(apiKey)fetchAll();
+  }else{
+    GAS_URL=prev; /* 確認できなかった場合は保存しない */
+    m.style.color=getComputedStyle(document.documentElement).getPropertyValue('--danger');
+    m.textContent='接続を確認できませんでした: '+syncIssueText(r)+'(URLは保存していません)';
+  }
+}
+async function endpointResetToDefault(){
+  const m=document.getElementById('endpointMsg');
+  m.style.color='var(--sub)';m.textContent='確認中…';
+  GAS_URL=DEFAULT_GAS_URL;
+  lsSet(LS_ENDPOINT,'');
+  document.getElementById('endpointInput').value=GAS_URL;
+  document.getElementById('endpointCurrent').textContent=GAS_URL;
+  const r=await endpointCheck(GAS_URL);
+  if(r.kind==='ok'||r.kind==='unauthorized'){
+    m.textContent='既定のURLに戻し、接続を確認しました。';
+    toast('接続先URLを既定に戻しました');
+    delete syncIssues.read;fetchRetry=0;updStat();
+    if(apiKey)fetchAll();
+  }else{
+    m.style.color=getComputedStyle(document.documentElement).getPropertyValue('--danger');
+    m.textContent='既定のURLに戻しましたが、接続確認に失敗しました: '+syncIssueText(r);
+  }
+}
 
 
 let cats=[
@@ -2450,6 +2582,7 @@ function entryValues(e){
   return vals;
 }
 let urgOn=false,impOn=false,showDone=false,ankenFilter='',archOn=false,holdOn=false,billOn=false,payOn=false;
+let monthFilter=''; /* v73: 整理パネルの月別件数からの絞り込み(YYYY-MM形式) */
 let seikyuAgg=null;
 /* メモの内容欄から金額を読み取る(「55,000円」「5万円」「5万5000円」等。最初に見つかった金額を使う) */
 function pfMoneyAmt(d){
@@ -2511,6 +2644,7 @@ function paintFilters(){
 function passFilters(e){
   const d=e.data||{};
   if(catFilter&&e.cat!==catFilter)return false;
+  if(monthFilter&&monthKeyOf(e.ts)!==monthFilter)return false; /* v73: 整理パネルの月別絞り込み */
   if(archOn){
     if(!e.arch)return false;
   }else{
@@ -2618,8 +2752,9 @@ function summaryHTML(e){
 }
 function visibleList(){
   /* v61: ふだんは選択中タブの記録だけ表示。検索・案件・未請求・未入金のときは全タブ横断 */
+  /* v73: 整理パネルのカテゴリ別・月別クリックも同様に全タブ横断にする */
   const q=document.getElementById('searchBox').value.trim();
-  const tabScoped=!q&&!ankenFilter&&!billOn&&!payOn;
+  const tabScoped=!q&&!ankenFilter&&!billOn&&!payOn&&!catFilter&&!monthFilter;
   return sortForList(entries.filter(passFilters).filter(e=>!tabScoped||e.cat===activeCat).filter(e=>!q||matches(e,q)));
 }
 function renderTimeline(){
@@ -2673,7 +2808,7 @@ function renderTimeline(){
     }
   }
   const list=visibleList();
-  if(!list.length){el.innerHTML='<div class="empty-timeline">このタブに表示できる記録がありません(検索すると全タブから探せます。完了分は「完了を含む」、保留分は「保留」で表示されます)</div>';renderBanner();renderKanriDash();return}
+  if(!list.length){el.innerHTML='<div class="empty-timeline">このタブに表示できる記録がありません(検索すると全タブから探せます。完了分は「完了を含む」、保留分は「保留」で表示されます)</div>';renderBanner();renderKanriDash();renderOrganizePanel();return}
   const shown=list.slice(0,listLimit);
   shown.forEach(e=>{
     try{
@@ -2704,6 +2839,7 @@ function renderTimeline(){
     el.appendChild(m);
   }
   renderBanner();renderKanriDash();
+  renderOrganizePanel(); /* v73: 整理パネルも記録の更新にあわせて再集計 */
 }
 function openDetail(id){
   detailId=id;
@@ -2899,6 +3035,135 @@ function hardDeleteOne(){
     enqueue({action:'delete',id:id});
     closeDetail();renderTimeline();toastErr('完全に削除しました');
   });
+}
+
+/* ============== v73: 整理パネル(1400px以上=右カラム常時表示、未満=引き出し) ==============
+   追加APIは使わず、fetchAll()でメモリ上にある entries[] からクライアント側で集計するだけ。 */
+function toggleOrganizePanel(){
+  const ov=document.getElementById('organizeOverlay');if(!ov)return;
+  const opening=!ov.classList.contains('open');
+  ov.classList.toggle('open');
+  if(opening)renderOrganizePanel();
+}
+function closeOrganizePanel(){const ov=document.getElementById('organizeOverlay');if(ov)ov.classList.remove('open')}
+function organizeMainContent(e){try{return colsOf(e).content||''}catch(err){return ''}}
+/* 未整理の基準: このアプリにはタグ・カテゴリ空欄という概念がない(タブ=カテゴリは必須)ため、
+   「内容欄が実質空(5文字未満)」を未整理の判定に使う。基準は画面にも明記する。 */
+function isUnorganized(e){return organizeMainContent(e).trim().length<5}
+function monthKeyOf(ts){if(!ts)return'';const d=new Date(ts);return d.getFullYear()+'-'+pad2(d.getMonth()+1)}
+function startOfWeek(d){const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());const wd=(x.getDay()+6)%7;x.setDate(x.getDate()-wd);return x}
+function toggleMonthFilter(key){monthFilter=(monthFilter===key)?'':key;listLimit=20;renderTimeline();window.scrollTo({top:0})}
+function organizeRow(labelText,rightText,onClick,active){
+  const row=document.createElement('div');
+  row.className='org-row'+(active?' on':'');
+  const t=document.createElement('span');t.className='org-t';t.textContent=labelText;
+  const n=document.createElement('span');n.className='org-n';n.textContent=rightText||'';
+  row.appendChild(t);row.appendChild(n);
+  if(onClick){row.onclick=onClick;row.style.cursor='pointer'}
+  return row;
+}
+function organizeSection(titleText){
+  const sec=document.createElement('div');sec.className='org-sec';
+  const h=document.createElement('div');h.className='org-h';h.textContent=titleText;
+  sec.appendChild(h);
+  return sec;
+}
+function renderOrganizePanel(){
+  const host=document.getElementById('organizePanel');
+  if(!host||typeof entries==='undefined')return;
+  host.innerHTML=''; /* ここでクリアするのは構造だけ。ログ本文はこの後textContentで入れる */
+  const live=entries.filter(x=>!x.arch);
+
+  /* a. 概況 */
+  const secA=organizeSection('概況');
+  const stats=document.createElement('div');stats.className='org-stats';
+  const weekStart=startOfWeek(new Date()).getTime();
+  const thisWeek=live.filter(x=>(x.ts||0)>=weekStart).length;
+  const pinnedList=live.filter(x=>x.data&&x.data.pin);
+  const unorganizedList=live.filter(isUnorganized);
+  [['総件数',entries.length],['今週',thisWeek],['ピン留め',pinnedList.length],['未整理',unorganizedList.length]].forEach(pair=>{
+    const box=document.createElement('div');box.className='org-stat';
+    const b=document.createElement('b');b.textContent=String(pair[1]);
+    const s=document.createElement('span');s.textContent=pair[0];
+    box.appendChild(b);box.appendChild(s);stats.appendChild(box);
+  });
+  secA.appendChild(stats);
+  const hint=document.createElement('div');hint.className='org-hint';
+  hint.textContent='未整理の基準: 内容欄が5文字未満(アーカイブ済みを除く)';
+  secA.appendChild(hint);
+  host.appendChild(secA);
+
+  /* b. ピン留め一覧(新しい順) */
+  const secB=organizeSection('ピン留め('+pinnedList.length+')');
+  if(!pinnedList.length){
+    const em=document.createElement('div');em.className='org-empty';em.textContent='ピン留めはありません';secB.appendChild(em);
+  }else{
+    pinnedList.slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).forEach(e=>{
+      const label=catName(e.cat)+'　'+(organizeMainContent(e)||'(内容なし)');
+      const row=organizeRow(label,'',()=>openDetail(e.id));
+      secB.appendChild(row);
+    });
+  }
+  host.appendChild(secB);
+
+  /* c. タグ(カテゴリ)別件数。クリックで左をそのカテゴリに絞り込み、もう一度で解除 */
+  const secC=organizeSection('カテゴリ別件数');
+  const byCat=cats.map(c=>({id:c.id,name:c.name,n:live.filter(x=>x.cat===c.id).length}))
+    .filter(x=>x.n>0).sort((a,b)=>b.n-a.n);
+  if(!byCat.length){
+    const em=document.createElement('div');em.className='org-empty';em.textContent='記録がありません';secC.appendChild(em);
+  }else{
+    byCat.forEach(x=>{
+      const row=organizeRow(x.name,x.n+'件',()=>toggleCat(x.id),catFilter===x.id);
+      secC.appendChild(row);
+    });
+  }
+  host.appendChild(secC);
+
+  /* d. 月別件数(直近12か月・横棒はCSSのみ) */
+  const secD=organizeSection('月別件数(直近12か月)');
+  const months=[];
+  const baseD=new Date();baseD.setDate(1);
+  for(let i=11;i>=0;i--){
+    const d=new Date(baseD.getFullYear(),baseD.getMonth()-i,1);
+    months.push({key:d.getFullYear()+'-'+pad2(d.getMonth()+1),label:pad2(d.getMonth()+1)+'月'});
+  }
+  const monthCounts=months.map(m=>({key:m.key,label:m.label,n:live.filter(x=>monthKeyOf(x.ts)===m.key).length}));
+  const maxN=Math.max(1,...monthCounts.map(m=>m.n));
+  monthCounts.forEach(m=>{
+    const row=document.createElement('div');
+    row.className='org-bar-row'+(monthFilter===m.key?' on':'');
+    row.style.cursor='pointer';
+    const lbl=document.createElement('span');lbl.className='org-bar-lbl';lbl.textContent=m.label;
+    const track=document.createElement('span');track.className='org-bar-track';
+    const fill=document.createElement('span');fill.className='org-bar-fill';fill.style.width=(m.n/maxN*100)+'%';
+    track.appendChild(fill);
+    const n=document.createElement('span');n.className='org-bar-n';n.textContent=String(m.n);
+    row.appendChild(lbl);row.appendChild(track);row.appendChild(n);
+    row.onclick=()=>toggleMonthFilter(m.key);
+    secD.appendChild(row);
+  });
+  host.appendChild(secD);
+
+  /* e. 未整理一覧(先頭20件) */
+  const secE=organizeSection('未整理(先頭20件・全'+unorganizedList.length+'件)');
+  if(!unorganizedList.length){
+    const em=document.createElement('div');em.className='org-empty';em.textContent='該当なし';secE.appendChild(em);
+  }else{
+    unorganizedList.slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,20).forEach(e=>{
+      const row=organizeRow(catName(e.cat)+'　'+fmt6((e.data&&e.data.date)||''),'開く',()=>openDetail(e.id));
+      secE.appendChild(row);
+    });
+  }
+  host.appendChild(secE);
+
+  /* f. 送信待ちキューと最終同期時刻(既存の状態表示をそのまま流用) */
+  const secF=organizeSection('同期状況');
+  const fRow=document.createElement('div');fRow.className='org-empty';
+  const qn=outbox.length+imgbox.length;
+  fRow.textContent='送信待ち '+qn+'件 ／ 最終受信 '+fmtWhen(lastFetchOk);
+  secF.appendChild(fRow);
+  host.appendChild(secF);
 }
 function copyAll(){
   const q=document.getElementById('searchBox').value.trim();
