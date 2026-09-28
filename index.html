@@ -282,6 +282,22 @@ textarea.edit-content{height:calc(15em + 20px);min-height:calc(15em + 20px);line
   #organizeOverlay .sheet{position:sticky;top:16px;width:360px;max-width:360px;max-height:calc(100vh - 32px);border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);border:1px solid var(--line);margin:0}
   #organizeCloseBtn{display:none}
 }
+.anken-finance{margin:14px 0;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--bg)}
+.anken-finance h4{margin:0 0 10px;font-size:.92rem}
+.finance-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:10px 0}
+.finance-grid div{background:var(--card);padding:8px;border-radius:6px;overflow-wrap:anywhere}
+.finance-grid small{display:block;color:var(--sub);font-size:.72rem}
+.finance-note{font-size:.78rem;line-height:1.6;color:var(--sub);overflow-wrap:anywhere}
+.finance-actions{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.finance-actions button,.finance-record,#memoReturn button{border:1px solid var(--line);border-radius:7px;padding:9px;background:var(--card);color:var(--ink);font:inherit;font-size:.82rem;cursor:pointer}
+.finance-record{display:block;width:100%;text-align:left;margin:5px 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.finance-record small{display:block;color:var(--sub);margin-bottom:3px}
+.finance-form{margin:12px 0;padding:12px;border:2px solid var(--line);border-radius:10px;background:var(--card)}
+.finance-form label{display:block;font-size:.8rem;margin:8px 0}
+.finance-form input,.finance-form textarea,.finance-form select{display:block;width:100%;margin-top:5px}
+.finance-form textarea{min-height:86px}
+.finance-form .primary{background:var(--ink);color:var(--card)}
+#memoReturn{margin-bottom:12px;padding:9px;border:1px solid var(--line);border-radius:8px;font-size:.82rem}
 </style>
 </head>
 <body>
@@ -296,6 +312,7 @@ textarea.edit-content{height:calc(15em + 20px);min-height:calc(15em + 20px);line
   <div id="kanriBanner" style="display:none"></div>
   <div class="entrycard" id="entrycard">
     <div class="editing-note" id="editingNote">▶ 既存の記録を編集中です(保存で上書き)</div>
+    <div id="memoReturn" style="display:none"></div>
     <div id="fields"></div>
     <button class="savebtn" id="saveBtn" onclick="saveEntry()">保 存</button>
   </div>
@@ -415,16 +432,25 @@ textarea.edit-content{height:calc(15em + 20px);min-height:calc(15em + 20px);line
 
 <!-- 同期状態パネル(v67) -->
 <div class="dlg-overlay" id="syncOverlay">
-  <div class="dlg">
+  <div class="dlg" style="max-height:85vh;overflow:auto">
     <div class="dt">同期状態</div>
     <div id="syncPanelBody" style="font-size:.85rem;line-height:1.6;margin-bottom:10px;white-space:pre-wrap"></div>
     <textarea id="syncExportArea" readonly style="display:none;width:100%;height:120px;margin-bottom:10px;font-size:.72rem"></textarea>
     <div id="syncFailedBtns" style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px"></div>
     <div class="dbtns"><button class="primary" onclick="syncRetryNow()">今すぐ再送</button><button onclick="syncExport()">書き出す</button><button onclick="closeSyncPanel()">閉じる</button></div>
-    <div class="dbtns" style="margin-top:6px"><button onclick="endpointOpen()">接続先URLを設定</button></div>
+    <div class="dbtns" style="margin-top:6px"><button onclick="openPendingPhotos()">送信待ちの写真を確認・保存</button></div>
+    <div class="dbtns" style="margin-top:6px"><button onclick="photoCopyReport()">写真の返答をコピー</button><button onclick="endpointOpen()">接続先URLを設定</button></div>
   </div>
 </div>
 
+<div class="dlg-overlay" id="pendingPhotosOverlay" style="z-index:350">
+  <div class="dlg" style="max-height:85vh;overflow:auto">
+    <div class="dt">送信待ちの写真</div>
+    <p style="font-size:.82rem;margin-bottom:12px">写真を端末へ保存できます。ここから保存しても送信待ちの写真は消えません。</p>
+    <div id="pendingPhotosBody"></div>
+    <div class="dbtns"><button onclick="document.getElementById('pendingPhotosOverlay').classList.remove('open')">閉じる</button></div>
+  </div>
+</div>
 <!-- 接続先URL設定(v73: 404対策。GASの再デプロイでURLが変わった時に画面から貼り替える) -->
 <div class="dlg-overlay" id="endpointOverlay">
   <div class="dlg">
@@ -456,7 +482,7 @@ const PALETTE=['#3B6FB5','#7B5EA7','#5F7F5F','#9E5E8A','#A84A3B','#4E6E9E','#8A7
 
 /* =============== 同期レイヤー(GAS+スプレッドシート) =============== */
 const DEFAULT_GAS_URL='https://script.google.com/macros/s/AKfycbygSxlsQ310UIm1yG9RbnB2lcvJZ_zFxoFhbboTIsoUnjWxlDFx499tn_BlhDl-x5R3/exec';
-const APP_VER='v73';
+const APP_VER='v74';
 const LS_KEY='ql_key', LS_CACHE='ql_cache_v32', LS_OUTBOX='ql_outbox_v1';
 function lsGet(k){try{return localStorage.getItem(k)}catch(e){return null}}
 function lsSet(k,v){try{localStorage.setItem(k,v)}catch(e){}}
@@ -488,28 +514,125 @@ let customPlaces=[];
 try{const p=JSON.parse(lsGet(LS_PLACES)||'[]');if(Array.isArray(p))customPlaces=p.filter(v=>typeof v==='string'&&v.trim()).map(v=>v.trim())}catch(e){}
 /* エラー履歴と現在の通信状態を分け、別の処理の成功で失敗表示を消さない。 */
 const syncIssues={};
+let storageInfo=null;
 let fetching=false,lastPostOk=0;
 const REQUEST_TIMEOUT_MS=20000,PHOTO_TIMEOUT_MS=60000;
 /* ---- 写真の送信待ち(v65)。記録本体とは別レーンにして、写真の失敗が記録の同期を止めないようにする ---- */
 const LS_IMGBOX='ql_imgbox_v1';
 let imgbox=[];try{imgbox=JSON.parse(lsGet(LS_IMGBOX)||'[]')||[]}catch(e){imgbox=[]}
-function saveImgbox(){lsSet(LS_IMGBOX,JSON.stringify(imgbox))}
-function imgEnqueue(id,data){imgbox.push({id:id,data:data});saveImgbox();updStat();imgFlush()}
+/* v74: A queue entry is removed only after a matching image can be read back.
+   Diagnostic records contain enums/status only; no credentials or image bytes. */
+const LS_PHOTO_REPLY='ql_photo_reply_v1';
+let photoReply=null;
+try{const r=JSON.parse(lsGet(LS_PHOTO_REPLY)||'null');if(r&&typeof r==='object')photoReply=r}catch(e){}
+function persistImgbox(next){
+  try{localStorage.setItem(LS_IMGBOX,JSON.stringify(next));return true}
+  catch(e){recordSyncIssue('photo',{kind:'photoStorage'});return false}
+}
+function saveImgbox(){return persistImgbox(imgbox)}
+function imgEnqueue(id,data){
+  imgbox.push({id:id,data:data});
+  if(!saveImgbox())toast('写真を端末に記憶できません。同期状態から写真を保存し、画面を閉じずに再送してください');
+  updStat();imgFlush();
+}
+function photoPayload(data){
+  if(typeof data!=='string')return null;
+  const m=/^data:image\/(jpeg|jpg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(data);
+  return m?{mime:m[1]==='jpg'?'jpeg':m[1],base64:m[2]}:null;
+}
+function samePhoto(a,b){
+  const x=photoPayload(a),y=photoPayload(b);
+  return !!(x&&y&&x.mime===y.mime&&x.base64===y.base64);
+}
+function photoSafeResult(r){
+  const known=['ok','badbody','rejected','unauthorized','network','timeout','html','login','notfound','forbidden','busy','server','http','client'];
+  const shapes=['http-error','login','html','entries','photo','json-error','json','empty','invalid-json'];
+  const codes=['notfound','badimage','badid','unknown_action','unknownaction','unsupported_action','unsupported','photo_conflict','photo_permission','photo_folder_ambiguous','photo_storage_error','photo_busy','unauthorized','INVALID_ID','INVALID_DATA_URL','INVALID_BASE64','INVALID_IMAGE','IMAGE_TOO_LARGE','IMAGE_VALIDATION_FAILED','PHOTO_FOLDER_AMBIGUOUS','PHOTO_ID_CONFLICT','PHOTO_NOT_FOUND','STORED_IMAGE_INVALID','DRIVE_READ_FAILED','DRIVE_CREATE_FAILED','LOCK_FAILED','LOCK_TIMEOUT','LOCK_RELEASE_FAILED'];
+  const raw=r&&r.j&&r.j.error;
+  return {kind:known.includes(r&&r.kind)?r.kind:'badbody',status:Number.isInteger(r&&r.status)?r.status:0,shape:shapes.includes(r&&r.shape)?r.shape:'',code:codes.includes(raw)?raw:''};
+}
+function rememberPhotoReply(upload,verify,result){
+  photoReply={when:Date.now(),upload:upload?photoSafeResult(upload):null,verify:verify?photoSafeResult(verify):null,result:result};
+  lsSet(LS_PHOTO_REPLY,JSON.stringify(photoReply));
+}
 let imgFlushing=false;
 async function imgFlush(){
   if(imgFlushing||!imgbox.length||!apiKey)return;
   imgFlushing=true;
   try{
     while(imgbox.length&&apiKey){
-      const op=imgbox[0],key=apiKey;
-      const r=await requestJson(GAS_URL,{method:'POST',body:JSON.stringify({key:key,action:'imgup',id:op.id,data:op.data})},PHOTO_TIMEOUT_MS);
-      if(key!==apiKey)break;
-      if(r.kind!=='ok'){recordSyncIssue('photo',r);break}
-      imgbox.shift();saveImgbox();lastPostOk=Date.now();delete syncIssues.photo;updStat();
+      const op=imgbox[0],key=apiKey,endpoint=GAS_URL;
+      const current=()=>key===apiKey&&endpoint===GAS_URL&&imgbox[0]===op;
+      if(!photoPayload(op.data)){recordSyncIssue('photo',{kind:'photoUnconfirmed'});break}
+      const r=await requestJson(endpoint,{method:'POST',body:JSON.stringify({key:key,action:'imgup',id:op.id,data:op.data})},PHOTO_TIMEOUT_MS);
+      if(!current())break;
+      // Access/explicit rejection errors are preserved; a GET cannot fix them.
+      if(['unauthorized','rejected','notfound','forbidden','login','busy'].includes(r.kind)&&!(r.kind==='rejected'&&r.j&&r.j.writeMayHaveOccurred===true)){
+        rememberPhotoReply(r,null,'send-failed');recordSyncIssue('photo',r);break;
+      }
+      const check=await requestJson(endpoint+'?key='+encodeURIComponent(key)+'&img='+encodeURIComponent(op.id),{},PHOTO_TIMEOUT_MS);
+      if(!current())break;
+      const remote=check.j&&check.j.data;
+      if((check.kind==='ok'||check.kind==='badbody')&&samePhoto(op.data,remote)){
+        // Save the shorter queue before changing the in-memory queue.
+        if(!persistImgbox(imgbox.slice(1))){rememberPhotoReply(r,check,'local-save-failed');break}
+        imgbox.shift();photoCache[op.id]=remote;lastPostOk=Date.now();delete syncIssues.photo;
+        rememberPhotoReply(r,check,'verified');updStat();continue;
+      }
+      let issue;
+      if(check.kind==='ok'&&check.j&&Array.isArray(check.j.entries))issue={kind:'photoUnsupported'};
+      else if(photoPayload(remote))issue={kind:'photoMismatch'};
+      else if(check.kind==='ok'||check.kind==='badbody'||(check.j&&['notfound','PHOTO_NOT_FOUND'].includes(check.j.error)))issue={kind:'photoUnconfirmed'};
+      else issue=check;
+      rememberPhotoReply(r,check,'unconfirmed');recordSyncIssue('photo',issue);break;
     }
   }catch(e){recordSyncIssue('photo',{kind:'client'})}
   finally{imgFlushing=false;updStat()}
 }
+function photoDiagnosticLines(){
+  if(!photoReply)return ['写真への返答: v74での確認はまだです。「今すぐ再送」で確認します。'];
+  const result={verified:'保存先の写真と一致（送信完了）','send-failed':'送信でエラー（写真を保持）',unconfirmed:'保存を確認できず（写真を保持）','local-save-failed':'端末の保存領域でエラー（写真を保持）'};
+  const shape={'http-error':'HTTPエラー',login:'ログイン画面',html:'HTML画面',entries:'記録一覧（写真ではありません）',photo:'写真データ','json-error':'エラーを表すJSON',json:'JSON（写真データなし）',empty:'空の返答','invalid-json':'JSON以外の本文'};
+  const code={notfound:'写真が見つかりません',badimage:'画像形式を拒否',badid:'写真番号を拒否',unknown_action:'写真送信の処理が未対応',unknownaction:'写真送信の処理が未対応',unsupported_action:'写真送信の処理が未対応',unsupported:'未対応',photo_conflict:'同じ写真番号の内容が不一致',photo_permission:'Driveへの権限を確認',photo_folder_ambiguous:'保存フォルダが複数あります',photo_storage_error:'写真保存でエラー',photo_busy:'保存処理が使用中',unauthorized:'合言葉エラー'};
+  Object.assign(code,{INVALID_ID:'写真番号を拒否',INVALID_DATA_URL:'画像形式を拒否',INVALID_BASE64:'画像データの形式が不正',INVALID_IMAGE:'画像ファイルを確認できません',IMAGE_TOO_LARGE:'写真が大きすぎます（上限10MB）',IMAGE_VALIDATION_FAILED:'写真の確認に失敗',PHOTO_FOLDER_AMBIGUOUS:'保存フォルダが複数あります',PHOTO_ID_CONFLICT:'同じ写真番号の内容が不一致',PHOTO_NOT_FOUND:'写真が見つかりません',STORED_IMAGE_INVALID:'保存先のファイルを画像として確認できません',DRIVE_READ_FAILED:'Driveの読み取り失敗（権限などを確認）',DRIVE_CREATE_FAILED:'Driveへの保存失敗',LOCK_FAILED:'保存処理の準備に失敗',LOCK_TIMEOUT:'別の保存処理の完了待ちで時間切れ',LOCK_RELEASE_FAILED:'保存処理の後始末でエラー'});
+  const lines=['写真の確認結果: '+(result[photoReply.result]||'未確認')+' '+fmtWhen(photoReply.when)];
+  [['upload','写真送信への返答'],['verify','写真の読み取り確認への返答']].forEach(([key,label])=>{
+    const r=photoReply[key];if(!r)return;
+    lines.push(label+': '+(r.status?'HTTP '+r.status:'HTTPの返答なし')+' / '+(shape[r.shape]||syncIssueText(r))+(code[r.code]?' / '+code[r.code]:''));
+  });
+  return lines;
+}
+function photoCopyReport(){
+  const report=['QuickLog '+APP_VER,...photoDiagnosticLines(),'送信待ちの写真: '+imgbox.length+'件'].join('\n');
+  const ta=document.getElementById('syncExportArea');ta.style.display='block';ta.value=report;
+  copyText(report,'写真への返答をコピーしました（写真・合言葉は含みません）');
+}
+function openPendingPhotos(){
+  const b=document.getElementById('pendingPhotosBody');b.replaceChildren();
+  if(!imgbox.length)b.textContent='送信待ちの写真はありません。';
+  imgbox.forEach((op,i)=>{
+    const box=document.createElement('div');box.style.cssText='margin-bottom:16px;border-bottom:1px solid var(--line);padding-bottom:12px';
+    const title=document.createElement('p');
+    const linked=entries.filter(e=>e.data&&Array.isArray(e.data.photos)&&e.data.photos.includes(op.id));
+    title.textContent='写真 '+(i+1)+' / '+(linked.length?'紐づく記録: '+linked.map(e=>e.no||'番号なし').join('、'):'保存済みの記録との紐づけなし');
+    box.appendChild(title);
+    if(photoPayload(op.data)){const im=document.createElement('img');im.src=op.data;im.alt='送信待ちの写真 '+(i+1);im.style.cssText='display:block;max-width:100%;max-height:180px;object-fit:contain;margin:8px 0';box.appendChild(im)}
+    const actions=document.createElement('div');actions.className='dbtns';
+    const button=document.createElement('button');button.textContent='この写真を端末へ保存';button.onclick=()=>downloadPendingPhoto(op);actions.appendChild(button);box.appendChild(actions);b.appendChild(box);
+  });
+  document.getElementById('pendingPhotosOverlay').classList.add('open');
+}
+function downloadPendingPhoto(op){
+  const data=photoPayload(op.data);if(!data){toast('画像形式を確認できません。「書き出す」で元データを保存してください');return}
+  try{
+    const raw=atob(data.base64),bytes=Uint8Array.from(raw,c=>c.charCodeAt(0));
+    const url=URL.createObjectURL(new Blob([bytes],{type:'image/'+data.mime}));
+    const a=document.createElement('a');a.href=url;a.download='quicklog-photo-'+String(op.id).replace(/[^a-zA-Z0-9_-]/g,'_')+'.'+(data.mime==='jpeg'?'jpg':data.mime);
+    document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+    toast('写真の保存を開始しました。送信待ちには残っています');
+  }catch(e){toast('写真を保存できません。「書き出す」で元データを保存してください')}
+}
+
 const photoCache={}; /* 表示用: 取得済み写真(このセッションの間だけ記憶) */
 let photoData={};    /* 選んだ直後の写真(送信前プレビュー用) */
 async function loadPhoto(id){
@@ -519,7 +642,7 @@ async function loadPhoto(id){
   if(pend)return pend.data;
   if(!apiKey)return null;
   const r=await requestJson(GAS_URL+'?key='+encodeURIComponent(apiKey)+'&img='+encodeURIComponent(id),{},PHOTO_TIMEOUT_MS);
-  if(r.kind==='ok'&&r.j.data){photoCache[id]=r.j.data;return r.j.data}
+  if(r.kind==='ok'&&photoPayload(r.j&&r.j.data)){photoCache[id]=r.j.data;return r.j.data}
   return null;
 }
 function uid(){return 'e'+Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
@@ -742,12 +865,16 @@ const STATUS_TEXT={
   login:'接続先でログインが必要です',
   html:'接続先からデータ以外の応答がありました',
   badbody:'接続先の応答を確認できません',
-  notfound:'接続先から404が返りました。Google側の一時的な不調のことが多いので、少し待って再試行してください。何度も続くときだけ、同期状態の「接続先URLを設定」でURLを確認してください（再試行できます）',
+  notfound:'接続先から404が返りました（URL・公開状態を確認してください）',
   forbidden:'接続先へのアクセスが拒否されました（403）',
   busy:'接続先が混み合っています（429）',
   server:'接続先でエラーが起きています',
   http:'通信エラー',unauthorized:'合言葉エラー',
-  client:'アプリ内の処理でエラーが起きました'
+  client:'アプリ内の処理でエラーが起きました',
+  photoUnsupported:'保存先から写真ではなく記録一覧が返りました',
+  photoUnconfirmed:'写真の保存を確認できません（端末に保持中）',
+  photoMismatch:'保存先の同じ写真番号に別の画像があります（端末に保持中）',
+  photoStorage:'写真の端末保存に失敗しました。閉じる前に写真を書き出してください'
 };
 function safeSyncReason(value,key=apiKey){
   let t=String(value||'').replace(/https?:\/\/[^\s<>"']+/gi,'[接続先]');
@@ -760,25 +887,28 @@ function syncIssueText(r){
 }
 function recordSyncIssue(channel,r){
   const o={kind:r.kind,status:r.status||0,snippet:safeSyncReason(r.snippet),when:Date.now(),channel:channel};
+  if(r.shape)o.shape=r.shape;
   syncIssues[channel]=o;setLastErr(o);
 }
 async function readJson(res){
-  const base={j:null,status:res.status,snippet:''};
-  /* HTTP失敗は本文のok値より優先。通信失敗で記録を「保留」に移さない。 */
+  const base={j:null,status:res.status,snippet:'',shape:'http-error'};
   if(!res.ok){
     const kind=res.status===404?'notfound':res.status===403?'forbidden':res.status===429?'busy':res.status>=500?'server':'http';
     return Object.assign(base,{kind:kind});
   }
   const text=await res.text();
-  /* 転送がブラウザに遮断された場合はResponse自体が得られずnetworkになる。 */
-  if(/accounts\.google\.com/.test(res.url||'')||(/^\s*</.test(text)&&/accounts\.google\.com/.test(text)))return Object.assign(base,{kind:'login'});
-  if(/^\s*</.test(text))return Object.assign(base,{kind:'html'});
-  let j;try{j=JSON.parse(text)}catch(e){return Object.assign(base,{kind:'badbody'})}
-  if(j&&j.ok===true)return Object.assign(base,{kind:'ok',j:j});
+  if(/accounts\.google\.com/.test(res.url||'')||(/^\s*</.test(text)&&/accounts\.google\.com/.test(text)))return Object.assign(base,{kind:'login',shape:'login'});
+  if(/^\s*</.test(text))return Object.assign(base,{kind:'html',shape:'html'});
+  let j;try{j=JSON.parse(text)}catch(e){return Object.assign(base,{kind:'badbody',shape:text.trim()?'invalid-json':'empty'})}
+  base.shape=j&&Array.isArray(j.entries)?'entries':j&&typeof j.data==='string'?'photo':j&&typeof j.error==='string'?'json-error':'json';
+  base.j=j;
+  if(j&&j.ok===true)return Object.assign(base,{kind:'ok'});
   if(j&&j.error==='unauthorized')return Object.assign(base,{kind:'unauthorized'});
   if(j&&j.ok===false&&typeof j.error==='string'&&j.error.trim())return Object.assign(base,{kind:'rejected',snippet:safeSyncReason(j.error)});
+  // An error-only/unknown JSON response is not an explicit rejected write.
   return Object.assign(base,{kind:'badbody'});
 }
+
 /* fetchだけでなく応答本文の読み取りにも制限時間を設ける。
    Content Serviceの一時的な転送先をキャッシュから再利用しない。 */
 async function requestJson(url,options={},timeoutMs=REQUEST_TIMEOUT_MS){
@@ -799,7 +929,7 @@ function updStat(msg){
   const n=outbox.length+imgbox.length;
   const issues=Object.values(syncIssues).sort((a,b)=>b.when-a.when);
   const counts=[n?'送信待ち '+n+'件'+(imgbox.length?'（うち写真'+imgbox.length+'件）':''):'',failed.length?'保留 '+failed.length+'件':''].filter(Boolean).join(' / ');
-  const current=issues.length?syncIssueText(issues[0]):(fetching?'読込中…':(!apiKey?'未接続':(!lastFetchOk?'受信確認待ち':'')));
+  const current=issues.length?(issues[0].channel==='photo'?'写真: ':'')+syncIssueText(issues[0]):(fetching?'読込中…':(!apiKey?'未接続':(!lastFetchOk?'受信確認待ち':'')));
   el.textContent=msg||[current,counts].filter(Boolean).join(' / ')||'同期済み';
   el.style.color=(msg&&msg!=='同期済み')||issues.length||n||failed.length||!apiKey?'#E05656':'var(--beige-strong)'; /* v73: 緑→ベージュ(エラー赤は変更なし) */
   const panel=document.getElementById('syncOverlay');
@@ -957,6 +1087,7 @@ async function fetchAllOnce(requestKey){
     }
     if(r.kind!=='ok'){failure=r;throw new Error('sync response')}
     const j=r.j;
+      if(j&&j.storage&&typeof j.storage==='object')storageInfo=j.storage;
     if(!Array.isArray(j.entries)||j.entries.some(en=>!en||!en.id||!en.data||typeof en.data!=='object'||Array.isArray(en.data))){
       failure={kind:'badbody'};throw new Error('sync data');
     }
@@ -1026,10 +1157,16 @@ function renderSyncPanel(){
   lines.push('現在の状態: '+document.getElementById('syncStat').textContent);
   lines.push('最終受信成功（今回起動後）: '+fmtWhen(lastFetchOk));
   lines.push('最終送信成功（今回起動後）: '+fmtWhen(lastPostOk));
-  lines.push('通信の待ち時間: 通常20秒、写真60秒。時間切れ後も未送信データは残ります。');
+  lines.push('通信の待ち時間: 通常20秒。写真は送信・保存確認がそれぞれ最大60秒です。時間切れでも写真は削除しません。');
   Object.entries(syncIssues).forEach(([ch,r])=>lines.push(({read:'受信',send:'送信',photo:'写真送信'}[ch]||ch)+': '+syncIssueText(r)));
   lines.push('送信待ち: '+outbox.length+'件(写真'+imgbox.length+'件)');
   lines.push('保留(3回拒否): '+failed.length+'件');
+  lines.push(...photoDiagnosticLines());
+  lines.push('記録件数（この端末）: '+entries.length+'件');
+  if(storageInfo&&storageInfo.ok===true&&Number.isSafeInteger(storageInfo.totalGridCells)&&Number.isSafeInteger(storageInfo.remainingCells))lines.push('前回受信した表の容量: 確保済み '+storageInfo.totalGridCells.toLocaleString()+'セル / 設定した容量基準まで残り '+storageInfo.remainingCells.toLocaleString()+'セル');
+  else lines.push('表の残り容量: 未確認（保存先側の容量取得機能が必要です）');
+  lines.push('行の自動追加は保存先の処理によります。画面の記録件数だけでは空き行数は分かりません。');
+  lines.push('写真本体の保存先: Googleドライブの quicklog_photos。表には写真番号、QuickLogのメモ詳細には画像を表示します。');
   if(lastErr)lines.push('過去のエラー履歴（現在の状態とは別）: '+syncIssueText(lastErr)+' '+fmtWhen(lastErr.when));
   else lines.push('過去のエラー履歴: なし');
   if(failed.length){
@@ -1220,7 +1357,9 @@ let cats=[
    {k:'partner',label:'相手方に紐づけ(任意)',type:'person'},
    {k:'anken',label:'案件に紐づけ(任意)',type:'ankenlink'},
    {k:'bukkenref',label:'物件に紐づけ(任意)',type:'bukkenlink'},
-   {k:'money',label:'マーク(任意)',type:'select',optional:true,options:['請求済み','入金済み','レシピ'],cls:{'請求済み':'io-out','入金済み':'io-in','レシピ':'mk-rec'},hint:'請求済み・入金済みは内容の金額(「55,000円」等)を自動で読み取ります'},
+   {k:'money',label:'マーク(任意)',type:'select',optional:true,options:['見積','請求済み','入金済み','レシピ'],cls:{'請求済み':'io-out','入金済み':'io-in','レシピ':'mk-rec'},hint:'見積・請求・入金は金額欄を優先。旧メモは内容の金額も読めます'},
+   {k:'moneyAmt',label:'金額(円・空欄は金額未確認)',type:'yen',showIf:{k:'money',vs:['見積','請求済み','入金済み']}},
+   {k:'estimateState',label:'見積の扱い',type:'select',options:['採用','下書き'],def:'採用',showIf:{k:'money',v:'見積'},hint:'採用見積のうち、作成順で最新の1件を比較に使用。請求には加算しません'},
    {k:'content',label:'内容',type:'bigtext',ph:'メモ・気づきを自由に',main:1},
    {k:'photos',label:'写真(任意)',type:'photos'}]},
  {id:'shushi',name:'収支',color:'#1F5C40',text:'#fff',fields:[
@@ -1482,7 +1621,7 @@ function saveDraft(){
       const d=readFields();
       if(editingId||hasBodyOf(c,d)){
         if(durState)d.durMin=durState;
-        lsSet(LS_DRAFT,JSON.stringify({cat:activeCat,editingId:editingId,data:d,ts:Date.now()}));
+        lsSet(LS_DRAFT,JSON.stringify({cat:activeCat,editingId:editingId,data:d,returnAnkenId:formReturnAnkenId,ts:Date.now()}));
       }else{
         lsSet(LS_DRAFT,'');
       }
@@ -1496,12 +1635,14 @@ function restoreDraft(){
     if(!dr||!dr.data)return false;
     if(Date.now()-(dr.ts||0)>86400000){lsSet(LS_DRAFT,'');return false} /* 1日経った下書きは捨てる */
     const c=cats.find(x=>x.id===dr.cat);if(!c)return false;
-    if(dr.editingId&&!entries.some(x=>String(x.id)===String(dr.editingId)))dr.editingId=null;
+    if(dr.editingId&&!entries.some(x=>String(x.id)===String(dr.editingId))){toastErr('下書きの編集元が見つかりません。重複作成を避けるため復元を保留しました');return false}
     if(!dr.editingId&&!hasBodyOf(c,dr.data))return false;
     activeCat=dr.cat;
     editingId=dr.editingId||null;
     renderTabs();
     renderFields(dr.data);
+    formReturnAnkenId=dr.returnAnkenId||null;
+    paintMemoReturn();
     setTimeout(()=>toast('入力途中だった内容を復元しました'),500);
     return true;
   }catch(e){return false}
@@ -1509,7 +1650,14 @@ function restoreDraft(){
 
 /* ============== 入力欄(部品レンダラー) ============== */
 let selState={};
+let formAnkenId=null,formReturnAnkenId=null;
 function renderFields(vals={}){
+  const linked=linkedAnken(vals);
+  formAnkenId=linked?linked.id:(vals.ankenId??null);
+  formReturnAnkenId=null;
+  vals={...vals};
+  if(linked)vals.anken=ankenLabel(linked);
+  if(activeCat==='pf'&&isMoneyMark(vals.money)&&!Object.prototype.hasOwnProperty.call(vals,'moneyAmt'))vals.moneyAmt=pfMoneyAmt(vals)||'';
   const c=catOf(activeCat);
   const f=document.getElementById('fields');
   document.getElementById('editingNote').style.display=editingId?'block':'none';
@@ -1562,6 +1710,7 @@ function renderFields(vals={}){
   c.fields.filter(x=>x.type==='personlist').forEach(x=>renderPL(x.k));
   if(c.fields.some(x=>x.type==='photos'))renderPhotos();
   applyShowIf();applyBigIf();
+  paintMemoReturn();
   const main=c.fields.find(x=>x.main);
   if(main&&!editingId){const e=document.getElementById('f_'+main.k);if(e&&e.focus)setTimeout(()=>{try{e.focus({preventScroll:true})}catch(_){ }window.scrollTo({top:0})},50)}
 }
@@ -1618,6 +1767,7 @@ function fieldHTML(fd,vals){
     case 'text':return wrap(`<input type="text" id="f_${fd.k}" placeholder="${escAttr(fd.ph||'')}" value="${escAttr(v||'')}">`);
     case 'textarea':return wrap(`<textarea id="f_${fd.k}" placeholder="${escAttr(fd.ph||'')}">${esc(v||'')}</textarea>`);
     case 'bigtext':return wrap(`<textarea class="big${fd.compact?' oneline':''}" id="f_${fd.k}" placeholder="${escAttr(fd.ph||'')}">${esc(v||'')}</textarea>`);
+    case 'yen':return wrap(`<input type="text" id="f_${fd.k}" inputmode="numeric" placeholder="未確認" value="${escAttr(v??'')}">`);
     case 'amount':return wrap(`<input type="number" id="f_${fd.k}" inputmode="numeric" placeholder="0" value="${v??''}">`);
     case 'minutes':return wrap(
       `<div class="minrow"><input type="number" id="f_${fd.k}" inputmode="numeric" placeholder="0" value="${v??''}"><span class="unit">分</span>`+
@@ -1937,28 +2087,42 @@ function readFields(){
     const e=document.getElementById('f_'+fd.k);if(!e)return;
     if(fd.type==='person'||fd.type==='ankenlink'||fd.type==='bukkenlink'){d[fd.k]=e.classList.contains('empty')?'':e.textContent}
     else if(fd.type==='select'){d[fd.k]=selState[fd.k]}
+    else if(fd.type==='yen'){const raw=e.value.trim();d[fd.k]=raw===''?null:(positiveJPY(raw)||raw)}
     else if(fd.type==='amount'||fd.type==='minutes'||fd.type==='seconds'){d[fd.k]=e.value===''?'':Number(e.value)}
     else{d[fd.k]=e.value.trim()}
   });
+  if(c.fields.some(f=>f.type==='ankenlink')){
+    const a=ankenById(formAnkenId);
+    d.ankenId=a?a.id:(formAnkenId??'');
+    if(a)d.anken=ankenLabel(a);
+  }
   if(c.fields.some(f=>f.type==='statline'&&f.sk==='doneStat')&&d.doneStat==='完了'&&durState)d.durMin=durState;
   return d;
 }
 function saveEntry(){
   const c=catOf(activeCat);const d=readFields();
+  const previous=editingId?entries.find(x=>String(x.id)===String(editingId)):null;
+  if(editingId&&!previous){toastErr('編集元が見つかりません。再度一覧から開いてください');return}
+  const returnId=formReturnAnkenId;
   if(editingId){
     const prev=entries.find(x=>String(x.id)===String(editingId));
     if(prev&&Array.isArray(prev.data.doneKeys))d.doneKeys=prev.data.doneKeys;
     /* ピン留めはフォーム項目化していないので、上書き保存時に消えないよう旧データから引き継ぐ(仕様F) */
     if(prev&&prev.data&&prev.data.pin)d.pin=prev.data.pin;
     /* カルテは非表示中の欄の値を消さずに引き継ぐ(区分切替やレイアウト変更でデータが飛ばないように) */
-    if(activeCat==='kanri'&&prev&&prev.data)Object.keys(prev.data).forEach(k=>{if(!(k in d))d[k]=prev.data[k]});
+    if(['kanri','pf','seikyu','anken'].includes(activeCat)&&prev&&prev.data)Object.keys(prev.data).forEach(k=>{
+      if(!(k in d)&&!['moneyAmt','estimateState'].includes(k))d[k]=prev.data[k];
+    });
   }
   if(c.fields.some(f=>f.type==='statline'&&f.sk==='doneStat')){
     const prevE=editingId?entries.find(x=>String(x.id)===String(editingId)):null;
     applyDoneMeta(d,prevE?prevE.data:null);
   }
   if(activeCat==='seikyu'&&!d.date)d.date=today6();
-  if(activeCat==='pf'&&(d.money==='請求済み'||d.money==='入金済み')&&!pfMoneyAmt(d)){toastErr('金額が読み取れません。内容に「55,000円」「5万5000円」のように円まで書いてください');return}
+  if(activeCat==='pf'&&isMoneyMark(d.money)){
+    if(d.moneyAmt!==null&&d.moneyAmt!==''&&d.moneyAmt!==undefined&&!positiveJPY(d.moneyAmt)){toastErr('金額は1円以上の整数で入力してください');return}
+    d.moneyAmt=positiveJPY(d.moneyAmt)||null;
+  }
   const dateF=c.fields.find(f=>f.type==='date6');
   if(dateF&&d[dateF.k]&&!valid6(d[dateF.k])){toastErr('日付は6桁で入力してください(例:'+today6()+')');return}
   for(const fd of c.fields.filter(f=>f.type==='statline'&&f.dk)){
@@ -1994,10 +2158,15 @@ function saveEntry(){
     if(fd.type==='personlist')(d[k]||[]).forEach(pushRecent);
   });
   let rec;
+  const renameLinks=previous&&activeCat==='anken'?entries.filter(x=>linkedToAnken(x,previous)):[];
   if(editingId){
     const idx=entries.findIndex(x=>String(x.id)===String(editingId));
-    rec={id:editingId,cat:activeCat,ts:(idx>=0?entries[idx].ts:Date.now()),data:d};
-    if(idx>=0)entries[idx]=rec;else entries.unshift(rec);
+    rec={...previous,cat:activeCat,data:d};
+    if(activeCat==='anken'&&ankenLabel(previous)!==ankenLabel(rec)){
+      rec.data.ankenAliases=[...new Set([...(previous.data.ankenAliases||[]),ankenLabel(previous)])];
+      relinkAnkenRecords(previous,rec,renameLinks);
+    }
+    entries[idx]=rec;
     editingId=null;toast('上書き保存しました');
   }else{
     rec={id:uid(),cat:activeCat,ts:Date.now(),data:d};
@@ -2009,6 +2178,7 @@ function saveEntry(){
   pushEntryOp(rec);
   clearDraft();
   renderFields();renderTimeline();
+  const parent=ankenById(returnId);if(parent)openDetail(parent.id);
 }
 
 /* ============== 案件ピッカー(紐づけ用) ============== */
@@ -2018,15 +2188,63 @@ function ankenLabel(en){
   const head=String(d.content||'').split('\n')[0];
   return ((d.partner?d.partner+'｜':'')+head).slice(0,40)||'(内容なし)';
 }
-/* 案件の紐づけ状況(件数と最終更新)。まとめ先の判断材料に使う */
-function ankenLinkInfo(label){
+/* IDがある記録はIDを優先。旧ラベルはアーカイブ・旧名も含め一意な場合だけ解決する。 */
+function ankenById(id){
+  if(id===null||id===undefined||id==='')return null;
+  const seen=new Set();
+  while(!seen.has(String(id))){
+    seen.add(String(id));
+    const a=entries.find(x=>x.cat==='anken'&&String(x.id)===String(id));
+    if(!a)return null;
+    if(!(a.data||{}).mergedIntoId)return a;
+    id=a.data.mergedIntoId;
+  }
+  return null;
+}
+function legacyAnkenCandidates(label){
+  if(typeof label!=='string'||!label)return [];
+  return entries.filter(x=>x.cat==='anken'&&(ankenLabel(x)===label||(Array.isArray((x.data||{}).ankenAliases)&&x.data.ankenAliases.includes(label))));
+}
+function linkedAnken(d={}){
+  if(Object.prototype.hasOwnProperty.call(d,'ankenId'))return ankenById(d.ankenId);
+  if(d.srcAnken!==undefined&&d.srcAnken!==null&&d.srcAnken!=='')return ankenById(d.srcAnken);
+  const matches=legacyAnkenCandidates(d.anken);
+  return matches.length===1?ankenById(matches[0].id):null;
+}
+function linkedToAnken(e,a){
+  if(!a||e.cat==='anken')return false;
+  const linked=linkedAnken(e.data||{});
+  return !!linked&&String(linked.id)===String(a.id);
+}
+function ankenLinkInfo(a){
+  if(typeof a==='string')a=linkedAnken({anken:a});
   let n=0,last=0;
-  entries.forEach(e=>{
-    if(e.arch)return;
-    const d=e.data||{};
-    if(typeof d.anken==='string'&&d.anken===label){n++;if((e.ts||0)>last)last=e.ts||0}
-  });
+  entries.forEach(e=>{if(!e.arch&&linkedToAnken(e,a)){n++;last=Math.max(last,e.ts||0)}});
   return {n:n,last:last};
+}
+/* 名前変更・統合でも記録そのものを移す。写真や金融記録を複製しない。 */
+function relinkAnkenRecords(src,dest,records){
+  const label=ankenLabel(dest);
+  const field=document.getElementById('f_anken');
+  const formParent=linkedAnken({ankenId:formAnkenId});
+  if(formParent&&String(formParent.id)===String(src.id)){
+    formAnkenId=dest.id;
+    if(field){field.textContent=label;field.classList.remove('empty')}
+  }
+  if(String(formReturnAnkenId)===String(src.id))formReturnAnkenId=dest.id;
+  try{
+    const dr=JSON.parse(lsGet(LS_DRAFT)||'null');
+    if(dr&&dr.data){
+      const a=linkedAnken(dr.data);
+      if(a&&String(a.id)===String(src.id)){dr.data.ankenId=dest.id;dr.data.anken=label}
+      if(String(dr.returnAnkenId)===String(src.id))dr.returnAnkenId=dest.id;
+      lsSet(LS_DRAFT,JSON.stringify(dr));
+    }
+  }catch(_){}
+  records.forEach(e=>{e.data.ankenId=dest.id;e.data.anken=label;pushEntryOp(e)});
+  if(String(ankenFilterId)===String(src.id)||(!ankenFilterId&&linkedAnken({anken:ankenFilter})?.id===src.id)){
+    ankenFilterId=dest.id;ankenFilter=label;paintFilters();
+  }
 }
 function tsDate(ts){
   if(!ts)return'';
@@ -2067,46 +2285,37 @@ function renderAnkenList(){
   list.forEach(e=>{
     const b=document.createElement('button');
     const lbl=ankenLabel(e);
-    const info=ankenLinkInfo(lbl);
+    const info=ankenLinkInfo(e);
     const own=(e.data||{}).date;
-    const meta=[e.no||'',own?'発生 '+fmt6(own):'','紐づけ'+info.n+'件',info.last?'最終 '+tsDate(info.last):''].filter(Boolean).join('・');
+    const meta=[e.no||String(e.id),own?'発生 '+fmt6(own):'','紐づけ'+info.n+'件',info.last?'最終 '+tsDate(info.last):''].filter(Boolean).join('・');
     b.innerHTML=((e.data||{}).pin?'📌 ':'')+esc(lbl)+'<br><span style="font-size:.74rem;color:var(--sub)">'+esc(meta)+'</span>';
-    b.onclick=()=>pickAnken(lbl);
+    b.onclick=()=>pickAnken(lbl,e.id);
     el.appendChild(b);
   });
 }
-function pickAnken(label){
+function pickAnken(label,id){
+  const dest=id!==undefined?ankenById(id):linkedAnken({anken:label});
+  if(label&&!dest){toastErr('同名の案件があります。選択一覧から案件を指定してください');return}
   if(ankenTarget==='__filter__'){
-    ankenFilter=label||'';
-    listLimit=20;
-    paintFilters();renderTimeline();
-    closeAnkenPicker();
-    return;
+    ankenFilter=dest?ankenLabel(dest):'';ankenFilterId=dest?dest.id:null;
+    listLimit=20;paintFilters();renderTimeline();closeAnkenPicker();return;
   }
   if(ankenTarget==='__merge__'){
+    if(!dest)return;
     closeAnkenPicker();
-    if(!label)return;
-    const srcId=mergeSrcId,srcLabel=mergeSrcLabel;
-    const src=entries.find(x=>String(x.id)===String(srcId));
-    const si=ankenLinkInfo(srcLabel),di=ankenLinkInfo(label);
-    const sd=(src&&src.data&&src.data.date)?fmt6(src.data.date):'';
-    const same=(srcLabel===label);
-    const dest=entries.find(x=>x.cat==='anken'&&!x.arch&&String(x.id)!==String(srcId)&&ankenLabel(x)===label);
-    const srcMeta=[(src&&src.no)||'',sd?'発生 '+sd:'','紐づけ'+si.n+'件'].filter(Boolean).join('・');
-    const destMeta=[(dest&&dest.no)||'','紐づけ'+di.n+'件'].filter(Boolean).join('・');
-    const after=same
-      ?'まとめ後: 紐づけ'+si.n+'件のまま(同名のため共通)。一覧のダブりが消えます'
-      :'まとめ後: 「'+label+'」に紐づけ'+(si.n+di.n)+'件が集まります';
-    askConfirm('まとめ元: 「'+srcLabel+'」('+srcMeta+')\n　↓ 紐づけ・金額の記録がすべて移ります\nまとめ先: 「'+label+'」('+destMeta+')\n\n'+after+'。まとめ元の内容・備考はアーカイブで見られます(番号は変わりません)','まとめる',()=>doMergeAnken(srcId,label));
+    const src=entries.find(x=>String(x.id)===String(mergeSrcId));if(!src)return;
+    const si=ankenLinkInfo(src),di=ankenLinkInfo(dest);
+    askConfirm('まとめ元: 「'+ankenLabel(src)+'」('+ (src.no||src.id) +')\nまとめ先: 「'+ankenLabel(dest)+'」('+ (dest.no||dest.id) +')\n紐づく記録'+si.n+'件を移し、計'+(si.n+di.n)+'件になります。同名で対応先が不明な旧記録は移しません。まとめ元はアーカイブに残します。','まとめる',()=>doMergeAnken(src.id,dest.id));
     return;
   }
   const e=document.getElementById('f_'+ankenTarget);
   if(e){
-    if(label){e.textContent=label;e.classList.remove('empty')}
-    else{e.textContent='';e.classList.add('empty')}
+    formAnkenId=dest?dest.id:null;
+    e.textContent=dest?ankenLabel(dest):'';e.classList.toggle('empty',!dest);
+    if(formReturnAnkenId)formReturnAnkenId=dest?dest.id:null;
+    paintMemoReturn();
   }
-  saveDraft();
-  closeAnkenPicker();
+  saveDraft();closeAnkenPicker();
 }
 
 /* ============== 案件まとめ(重複案件の統合) ============== */
@@ -2118,34 +2327,17 @@ function mergeAnkenStart(){
   closeDetail();
   openAnkenPicker('__merge__');
 }
-function doMergeAnken(srcId,destLabel){
-  const src=entries.find(x=>String(x.id)===String(srcId));
-  if(!src)return;
-  const srcLabel=ankenLabel(src);
-  let n=0;
-  /* 同名の重複案件は紐づけがすでに共通なので、付け替えは名前が違う時だけ行う */
-  if(srcLabel!==destLabel){
-    entries.forEach(en=>{
-      if(String(en.id)===String(srcId))return;
-      const d=en.data;if(!d)return;
-      if(typeof d.anken==='string'&&d.anken===srcLabel){
-        d.anken=destLabel;n++;
-        enqueue({action:'save',entry:en,cols:colsOf(en)},true);
-      }
-    });
-  }
-  const dest=entries.find(x=>x.cat==='anken'&&!x.arch&&String(x.id)!==String(srcId)&&ankenLabel(x)===destLabel);
-  src.arch=1;
-  src.data.mergedInto=destLabel;
-  if(dest&&dest.no)src.data.mergedIntoNo=dest.no;
-  enqueue({action:'save',entry:src,cols:colsOf(src)},true);
-  if(ankenFilter===srcLabel){ankenFilter=destLabel;paintFilters()}
-  saveLocal();flush();
-  renderTimeline();
-  const sN=src.no?src.no+' ':'',dN=(dest&&dest.no)?dest.no+' ':'';
-  toast(srcLabel===destLabel
-    ?'同名の重複案件をまとめました('+sN+'をアーカイブ、'+dN+'が残ります。紐づけは共通のためそのままです)'
-    :sN+'「'+srcLabel+'」を'+dN+'「'+destLabel+'」にまとめました(紐づく記録'+n+'件を付け替え)');
+function doMergeAnken(srcId,destId){
+  const src=entries.find(x=>x.cat==='anken'&&String(x.id)===String(srcId));
+  const dest=ankenById(destId);
+  if(!src||src.arch||!dest||dest.arch||String(src.id)===String(dest.id)){toastErr('まとめ元・まとめ先を再選択してください');return}
+  const records=entries.filter(x=>linkedToAnken(x,src));
+  relinkAnkenRecords(src,dest,records);
+  src.arch=1;src.data.mergedInto=ankenLabel(dest);src.data.mergedIntoId=dest.id;
+  if(dest.no)src.data.mergedIntoNo=dest.no;
+  saveLocal();pushEntryOp(src);renderTimeline();
+  toast('案件をまとめました(紐づく記録'+records.length+'件を移動、元の案件はアーカイブ)');
+  openDetail(dest.id);
 }
 
 /* ============== 期限管理(管理タブ)エンジン ============== */
@@ -2582,11 +2774,22 @@ function entryValues(e){
   return vals;
 }
 let urgOn=false,impOn=false,showDone=false,ankenFilter='',archOn=false,holdOn=false,billOn=false,payOn=false;
+let ankenFilterId=null;
 let monthFilter=''; /* v73: 整理パネルの月別件数からの絞り込み(YYYY-MM形式) */
 let seikyuAgg=null;
 /* メモの内容欄から金額を読み取る(「55,000円」「5万円」「5万5000円」等。最初に見つかった金額を使う) */
+function isMoneyMark(mark){return ['見積','請求済み','入金済み','請求','入金'].includes(mark)}
+function positiveJPY(value){
+  if(typeof value==='number')return Number.isSafeInteger(value)&&value>0?value:0;
+  if(typeof value!=='string')return 0;
+  const t=value.trim().replace(/[０-９]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xfee0));
+  if(!/^(?:[0-9]+|[1-9][0-9]{0,2}(?:,[0-9]{3})+)$/.test(t))return 0;
+  const n=Number(t.replace(/,/g,''));return Number.isSafeInteger(n)&&n>0?n:0;
+}
 function pfMoneyAmt(d){
   if(!d||!d.money)return 0;
+  /* 明示値が空・不正でも本文へフォールバックしない。未確認は0円と区別して表示する。 */
+  if(Object.prototype.hasOwnProperty.call(d,'moneyAmt'))return positiveJPY(d.moneyAmt);
   const t=String(d.content||'');
   let m=t.match(/(\d+(?:\.\d+)?)\s*万\s*([0-9][0-9,]*)?\s*円/);
   if(m)return Math.round(parseFloat(m[1])*10000)+(m[2]?(parseInt(m[2].replace(/,/g,''),10)||0):0);
@@ -2597,24 +2800,54 @@ function pfMoneyAmt(d){
 /* 請求・入金の集計対象: 請求タブの記録+お金の記録つきメモ */
 function moneyOf(e){
   const d=e.data||{};
-  if(e.cat==='seikyu')return {bill:Number(d.billAmt)||0,pay:Number(d.payAmt)||0};
-  if(e.cat==='pf'&&(d.money==='請求済み'||d.money==='入金済み')){
+  if(e.cat==='seikyu'){
+    const val=v=>Number.isFinite(Number(v))?Number(v):0;
+    return {bill:val(d.billAmt),pay:val(d.payAmt)};
+  }
+  if(e.cat==='pf'&&['請求済み','入金済み','請求','入金'].includes(d.money)){
     const a=pfMoneyAmt(d);
-    return d.money==='請求済み'?{bill:a,pay:0}:{bill:0,pay:a};
+    return ['請求済み','請求'].includes(d.money)?{bill:a,pay:0}:{bill:0,pay:a};
   }
   return null;
 }
+function financeUnknown(e){
+  const d=e.data||{};
+  if(e.cat==='pf'&&isMoneyMark(d.money)&&!pfMoneyAmt(d))return {n:1,bill:['請求済み','請求'].includes(d.money),pay:['入金済み','入金'].includes(d.money)};
+  if(e.cat==='seikyu'){
+    const has=v=>v!==undefined&&v!==null&&v!=='';
+    const bill=has(d.billAmt)&&!Number.isFinite(Number(d.billAmt));
+    const pay=has(d.payAmt)&&!Number.isFinite(Number(d.payAmt));
+    const empty=!has(d.billAmt)&&!has(d.payAmt);
+    return {n:bill||pay||empty?1:0,bill:bill||empty,pay:pay||empty};
+  }
+  return {n:0,bill:false,pay:false};
+}
+function ankenFinance(a){
+  const related=entries.filter(e=>linkedToAnken(e,a));
+  const active=related; /* アーカイブは表示整理。金額・見積履歴から除外しない。 */
+  const newest=(x,y)=>(Number(y.ts)||0)-(Number(x.ts)||0)||String(y.id).localeCompare(String(x.id));
+  const estimates=active.filter(e=>e.cat==='pf'&&e.data.money==='見積').sort(newest);
+  const latest=estimates.find(e=>e.data.estimateState!=='下書き')||null;
+  let bill=0,pay=0,unknown=0,unknownBill=false,unknownPay=false;
+  active.forEach(e=>{
+    const m=moneyOf(e);if(m){bill+=m.bill;pay+=m.pay}
+    const u=financeUnknown(e);unknown+=u.n;unknownBill=unknownBill||u.bill;unknownPay=unknownPay||u.pay;
+  });
+  const estimate=latest?(pfMoneyAmt(latest.data)||null):null;
+  return {related,estimates,latest,estimate,bill,pay,unpaid:Math.max(bill-pay,0),unbilled:estimate===null?null:Math.max(estimate-bill,0),overpay:Math.max(pay-bill,0),unknown,unknownBill,unknownPay};
+}
+function financeGroupKey(e){
+  const a=linkedAnken(e.data||{});return a?'A:'+a.id:'R:'+e.id;
+}
+function filterAnken(){return ankenFilterId!==null?ankenById(ankenFilterId):linkedAnken({anken:ankenFilter})}
 function buildSeikyuAgg(){
   const g={};const billedAnken=new Set();
   entries.forEach(e=>{
-    if(e.arch)return;
     const mo=moneyOf(e);if(!mo)return;
-    const d=e.data||{};
-    const key=(typeof d.anken==='string'&&d.anken)?('A:'+d.anken):('R:'+e.id);
-    if(!g[key])g[key]={bill:0,pay:0};
-    g[key].bill+=mo.bill;
-    g[key].pay+=mo.pay;
-    if(mo.bill>0&&typeof d.anken==='string'&&d.anken)billedAnken.add(d.anken);
+    const key=financeGroupKey(e),a=linkedAnken(e.data||{});
+    if(!g[key])g[key]={bill:0,pay:0,ankenId:a?a.id:null,name:a?ankenLabel(a):''};
+    g[key].bill+=mo.bill;g[key].pay+=mo.pay;
+    if(mo.bill>0&&a)billedAnken.add(String(a.id));
   });
   seikyuAgg={g:g,billedAnken:billedAnken};
 }
@@ -2653,17 +2886,19 @@ function passFilters(e){
       /* 回収モード(計算式): 未入金=案件単位で請求計>入金計の請求ログ・お金メモ / 未請求=完了済み案件で請求記録なし */
       let hit=false;
       if(payOn&&moneyOf(e)){
-        const key=(typeof d.anken==='string'&&d.anken)?('A:'+d.anken):('R:'+e.id);
+        const key=financeGroupKey(e);
         const sm=(seikyuAgg&&seikyuAgg.g[key])||{bill:0,pay:0};
         if(sm.bill>sm.pay)hit=true;
       }
       if(!hit&&billOn&&e.cat==='anken'){
-        if(d.doneStat==='完了'&&!(seikyuAgg&&seikyuAgg.billedAnken.has(ankenLabel(e))))hit=true;
+        const f=ankenFinance(e);
+        if(f.unbilled>0||(d.doneStat==='完了'&&!(seikyuAgg&&seikyuAgg.billedAnken.has(String(e.id)))))hit=true;
       }
       if(!hit)return false;
     }else if(ankenFilter){
       /* 案件フィルター中: その案件本体+紐づく記録を、完了も含めて全部表示 */
-      const linked=(e.cat==='anken'&&ankenLabel(e)===ankenFilter)||(typeof d.anken==='string'&&d.anken===ankenFilter);
+      const a=filterAnken();
+      const linked=a&&((e.cat==='anken'&&String(e.id)===String(a.id))||linkedToAnken(e,a));
       if(!linked)return false;
     }else if(holdOn){
       /* 保留庫: 保留だけを表示 */
@@ -2712,10 +2947,10 @@ function summaryHTML(e){
   });
   if(e.cat==='pf'&&d.money){
     if(d.money==='レシピ')badges+=`<span class="badge brecipe">レシピ</span>`;
-    else badges+=`<span class="badge ${d.money==='入金済み'?'bgreen':'bred'}">${esc(d.money)} ${fmtAmt(pfMoneyAmt(d))}</span>`;
+    else badges+=`<span class="badge ${d.money==='入金済み'?'bgreen':d.money==='見積'?'':'bred'}">${esc(d.money)}${d.money==='見積'?'('+esc(d.estimateState||'採用')+')':''} ${pfMoneyAmt(d)?fmtAmt(pfMoneyAmt(d)):'金額未確認'}</span>`;
   }
   if(e.cat==='anken'&&!e.arch){
-    const ln=ankenLinkInfo(ankenLabel(e)).n;
+    const ln=ankenLinkInfo(e).n;
     if(ln)badges+=`<span class="badge">紐づけ${ln}</span>`;
   }
   if(Array.isArray(d.photos)&&d.photos.length)badges+=`<span class="badge">📷${d.photos.length}</span>`;
@@ -2763,8 +2998,8 @@ function renderTimeline(){
   if(ankenFilter){
     let sb=0,sp=0;
     entries.forEach(x=>{
-      if(x.arch)return;const xd=x.data||{};
-      if(xd.anken!==ankenFilter)return;
+      const xd=x.data||{};
+      if(!linkedToAnken(x,filterAnken()))return;
       const mo=moneyOf(x);if(!mo)return;
       sb+=mo.bill;sp+=mo.pay;
     });
@@ -2781,7 +3016,7 @@ function renderTimeline(){
     Object.keys(seikyuAgg.g).forEach(k=>{
       const v=seikyuAgg.g[k];const zan=v.bill-v.pay;
       if(zan<=0)return;
-      if(k.indexOf('A:')===0){rows.push({name:k.slice(2),zan:zan});tot+=zan}
+      if(k.indexOf('A:')===0){rows.push({name:v.name,ankenId:v.ankenId,zan:zan});tot+=zan}
       else{freeZan+=zan;freeN++}
     });
     if(rows.length||freeN){
@@ -2795,7 +3030,7 @@ function renderTimeline(){
         const row=document.createElement('div');
         row.style.cssText='padding:3px 0;cursor:pointer;font-size:.88rem';
         row.innerHTML='<span class="zan-red num">¥'+r.zan.toLocaleString('ja-JP')+'</span>　'+esc(r.name.length>22?r.name.slice(0,22)+'…':r.name);
-        row.onclick=()=>{ankenFilter=r.name;listLimit=20;paintFilters();renderTimeline();window.scrollTo({top:0})};
+        row.onclick=()=>{ankenFilter=r.name;ankenFilterId=r.ankenId;listLimit=20;paintFilters();renderTimeline();window.scrollTo({top:0})};
         g.appendChild(row);
       });
       if(freeN){
@@ -2841,9 +3076,104 @@ function renderTimeline(){
   renderBanner();renderKanriDash();
   renderOrganizePanel(); /* v73: 整理パネルも記録の更新にあわせて再集計 */
 }
+/* 案件詳細内のメモ作成。新規は常に空の写真配列で開始し、既存記録から複製しない。 */
+function paintMemoReturn(){
+  const box=document.getElementById('memoReturn');if(!box)return;
+  const a=ankenById(formReturnAnkenId);
+  box.style.display=a?'block':'none';box.innerHTML='';if(!a)return;
+  const text=document.createElement('div');text.textContent='保存後に戻る案件: '+(a.no?a.no+' ':'')+ankenLabel(a);box.appendChild(text);
+  const button=document.createElement('button');button.type='button';button.textContent='案件の詳細を開く';button.onclick=()=>{saveDraft();openDetail(a.id)};box.appendChild(button);
+}
+function financeRecordButton(e,f){
+  const d=e.data||{},button=document.createElement('button');button.type='button';button.className='finance-record';
+  let mark=d.money||catName(e.cat);
+  if(d.money==='見積')mark+=(d.estimateState==='下書き'?'・下書き':f.latest&&String(f.latest.id)===String(e.id)?'・最新採用':'・旧見積');
+  if(e.arch)mark+='・アーカイブ';
+  let amount='';
+  if(e.cat==='pf'&&isMoneyMark(d.money))amount=pfMoneyAmt(d)?fmtAmt(pfMoneyAmt(d)):'金額未確認';
+  if(e.cat==='seikyu'){
+    const mo=moneyOf(e);amount='請求 '+fmtAmt(mo.bill)+' / 入金 '+fmtAmt(mo.pay)+(financeUnknown(e).n?' (金額未確認あり)':'');
+  }
+  button.innerHTML='<small>'+esc([e.no,fmt6(d.date),mark,amount].filter(Boolean).join('　'))+'</small>'+esc(String(d.content||d.note||'(内容なし)').slice(0,140));
+  button.onclick=()=>openDetail(e.id);return button;
+}
+function renderAnkenFinance(a,body){
+  const f=ankenFinance(a),wrap=document.createElement('section');wrap.className='anken-finance';
+  const partial=f.unknownBill||f.unknownPay?' (暫定)':'';
+  const cell=(label,value)=>'<div><small>'+label+'</small><strong>'+value+'</strong></div>';
+  wrap.innerHTML='<h4>案件メモ・見積・請求・入金</h4><div class="finance-grid">'+
+    cell('見積(最新採用)',f.latest?(f.estimate===null?'金額未確認':fmtAmt(f.estimate)):'採用見積なし')+
+    cell('見積に対して未請求',f.unbilled===null?'算出不可':fmtAmt(f.unbilled)+(f.unknownBill?' (暫定)':''))+
+    cell('請求累計',fmtAmt(f.bill)+(f.unknownBill?' (確認分)':''))+
+    cell('入金累計',fmtAmt(f.pay)+(f.unknownPay?' (確認分)':''))+
+    cell('未入金(請求 − 入金、下限0円)',fmtAmt(f.unpaid)+partial)+cell('過入金',fmtAmt(f.overpay)+partial)+'</div>'+
+    '<div class="finance-note">見積は請求に加算しません。未請求は最新採用見積 − 請求累計(下限0円)。アーカイブ済みの記録も集計に含みます。</div>'+
+    (f.unknown?'<div class="finance-note" role="status">金額未確認 '+f.unknown+'件。確認できた金額だけを集計しています。</div>':'');
+  const unresolved=entries.filter(e=>e.cat!=='anken'&&!linkedAnken(e.data||{})&&legacyAnkenCandidates((e.data||{}).anken).some(x=>String(x.id)===String(a.id))).length;
+  if(unresolved){const note=document.createElement('p');note.className='finance-note';note.textContent='案件を特定できない同名・旧名の記録 '+unresolved+'件は集計対象外です。記録の編集画面で案件を選び直してください。';wrap.appendChild(note)}
+  if(!a.arch){
+    const actions=document.createElement('div');actions.className='finance-actions';
+    [['メモを追加',''],['見積を追加','見積'],['請求を追加','請求済み'],['入金を追加','入金済み']].forEach(([label,mark])=>{
+      const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=()=>openLinkedMemoForm(a.id,mark);actions.appendChild(button);
+    });
+    wrap.appendChild(actions);
+    const host=document.createElement('div');host.id='linkedMemoHost';wrap.appendChild(host);
+  }
+  const history=document.createElement('details');history.open=true;
+  const title=document.createElement('summary');title.textContent='見積履歴 '+f.estimates.length+'件(作成順・最新の採用分を使用)';history.appendChild(title);
+  f.estimates.forEach(e=>history.appendChild(financeRecordButton(e,f)));wrap.appendChild(history);
+  const related=document.createElement('details');related.open=true;
+  const memos=f.related.filter(e=>['pf','seikyu'].includes(e.cat)).sort((x,y)=>(Number(y.ts)||0)-(Number(x.ts)||0));
+  const caption=document.createElement('summary');caption.textContent='関連メモ・旧請求記録 '+memos.length+'件';related.appendChild(caption);
+  memos.forEach(e=>related.appendChild(financeRecordButton(e,f)));wrap.appendChild(related);
+  body.appendChild(wrap);
+}
+function openLinkedMemoForm(ankenId,mark){
+  const a=ankenById(ankenId),host=document.getElementById('linkedMemoHost');if(!a||a.arch||!host)return;
+  if(host.firstChild){toastErr('入力中のメモを保存するか、キャンセルしてください');return}
+  const form=document.createElement('div');form.className='finance-form';
+  form.innerHTML='<h4>'+esc(mark||'メモ')+'を追加</h4><div class="finance-note">'+esc((a.no?a.no+' ':'')+ankenLabel(a))+'</div>'+
+    '<label>日付(6桁)<input id="linkedMemoDate" type="text" inputmode="numeric" maxlength="6" value="'+today6()+'"></label>'+
+    (mark?'<label>金額(円・空欄は金額未確認)<input id="linkedMemoAmount" type="text" inputmode="numeric" placeholder="例: 55,000"></label>':'')+
+    (mark==='見積'?'<label>見積の扱い<select id="linkedMemoEstimate"><option>採用</option><option>下書き</option></select></label>':'')+
+    '<label>内容<textarea id="linkedMemoContent" placeholder="内容・備考"></textarea></label><div class="finance-actions"></div>';
+  const actions=form.querySelector('.finance-actions');
+  const add=(label,fn,primary)=>{const button=document.createElement('button');button.type='button';button.textContent=label;button.onclick=fn;if(primary)button.className='primary';actions.appendChild(button)};
+  add('保存して案件に戻る',()=>saveLinkedMemo(ankenId,mark),true);
+  add('写真付きメモの編集へ',()=>linkedMemoToEditor(ankenId,mark));
+  add('キャンセル',()=>{host.innerHTML=''});
+  host.appendChild(form);document.getElementById(mark?'linkedMemoAmount':'linkedMemoContent').focus();
+}
+function readLinkedMemo(ankenId,mark){
+  const a=ankenById(ankenId),date=document.getElementById('linkedMemoDate'),content=document.getElementById('linkedMemoContent');
+  if(!a||a.arch||!date||!content){toastErr('案件を開き直してください');return null}
+  const d={date:date.value.trim()||today6(),partner:a.data.partner||'',ankenId:a.id,anken:ankenLabel(a),money:mark,content:content.value.trim(),photos:[]};
+  if(!valid6(d.date)){toastErr('日付を6桁で入力してください');return null}
+  if(mark){
+    const raw=document.getElementById('linkedMemoAmount').value.trim();
+    if(raw&&!positiveJPY(raw)){toastErr('金額は1円以上の整数で入力してください');return null}
+    d.moneyAmt=positiveJPY(raw)||null;
+    if(mark==='見積')d.estimateState=document.getElementById('linkedMemoEstimate').value;
+  }
+  return d;
+}
+function saveLinkedMemo(ankenId,mark){
+  const d=readLinkedMemo(ankenId,mark);if(!d)return;
+  if(!mark&&!d.content){toastErr('メモの内容を入れてください');return}
+  const rec={id:uid(),cat:'pf',ts:Date.now(),data:d},no=issueNo('pf');if(no)rec.no=no;
+  entries.unshift(rec);saveLocal();pushEntryOp(rec);renderTimeline();openDetail(d.ankenId);toast('案件に紐づけて保存しました');
+}
+function linkedMemoToEditor(ankenId,mark){
+  const d=readLinkedMemo(ankenId,mark);if(!d)return;
+  guardLeave(()=>{
+    activeCat='pf';editingId=null;renderTabs();renderFields(d);
+    formReturnAnkenId=d.ankenId;paintMemoReturn();closeDetail();saveDraft();window.scrollTo({top:0});
+    toast('写真を追加して保存してください。保存後に案件へ戻ります');
+  });
+}
 function openDetail(id){
-  detailId=id;
-  const e=entries.find(x=>x.id===id);
+  const e=entries.find(x=>String(x.id)===String(id));if(!e)return;
+  detailId=e.id;
   document.getElementById('detailTab').style.background=catColor(e.cat);
   document.getElementById('detailCat').textContent=catName(e.cat)+(e.no?'　'+e.no:'');
   document.getElementById('detailMeta').textContent=fmt6(e.data.date);
@@ -2867,10 +3197,12 @@ function openDetail(id){
         ${dspan}</div></div>`;
     }
     if(f.type==='photos')return''; /* 写真は下でまとめて表示 */
+    if(f.k==='moneyAmt')return''; /* 明示金額も旧本文金額も下で同じ表示にする */
+    if(f.k==='estimateState'&&e.data.money!=='見積')return'';
     let v=e.data[f.k];
     if(v===''||v===undefined||v===null)return'';
     if(Array.isArray(v)){if(!v.length)return'';v=v.join('、')}
-    if(f.type==='amount')v=fmtAmt(v);
+    if(f.type==='amount'||f.type==='yen')v=fmtAmt(v);
     if(f.type==='minutes')v=fmtMin(v);
     if(f.type==='seconds')v=v+'秒';
     if(f.type==='date6o')v=iso6(v)||v;
@@ -2882,6 +3214,9 @@ function openDetail(id){
     if(f.type==='select'&&f.labels&&f.labels[v])v=f.labelOnly?f.labels[v]:f.labels[v]+'('+v+')';
     return `<div class="dl"><div class="k">${f.label.replace(/(＋.*)/,'').trim()}</div><div class="v">${esc(v)}</div></div>`;
   }).join('');
+  if(e.cat==='pf'&&isMoneyMark(e.data.money)){
+    b.innerHTML+='<div class="dl"><div class="k">金額</div><div class="v">'+(pfMoneyAmt(e.data)?fmtAmt(pfMoneyAmt(e.data)):'金額未確認')+'</div></div>';
+  }
   if(e.data&&e.data.mergedInto){
     b.innerHTML+=`<div class="dl"><div class="k">統合先</div><div class="v">${esc((e.data.mergedIntoNo?e.data.mergedIntoNo+'　':'')+e.data.mergedInto)}</div></div>`;
   }
@@ -2894,11 +3229,12 @@ function openDetail(id){
       wrap.appendChild(im);
       loadPhoto(pid).then(d=>{
         if(d)im.src=d;
-        else im.alt='写真を読み込めませんでした(送信待ちの可能性。電波のある所で開き直してください)';
+        else im.alt='写真を取得できません。同期状態を確認してください';
       });
     });
     b.appendChild(wrap);
   }
+  if(e.cat==='anken')renderAnkenFinance(e,b);
   const acts=document.getElementById('detailActions');
   if(e.arch){
     let abtns='<button onclick="copyOne()">この1件をコピー</button><button onclick="unarchiveOne()">一覧に戻す</button>';
@@ -2911,18 +3247,17 @@ function openDetail(id){
       btns+=`<button onclick="togglePin('${escAttr(String(e.id))}')">${pinned?'📌ピン解除':'📌ピン留め'}</button>`;
     }
     if(e.cat==='anken')btns+='<button onclick="mergeAnkenStart()">別の案件にまとめる</button>';
-    if(e.data&&e.data.anken&&e.cat!=='anken')btns+='<button onclick="jumpToAnken()">紐づく案件を開く</button>';
+    if(e.data&&(e.data.anken||e.data.ankenId)&&e.cat!=='anken')btns+='<button onclick="jumpToAnken()">紐づく案件を開く</button>';
     btns+='<button class="danger" onclick="archiveOne()">アーカイブ</button>';
     acts.innerHTML=btns;
   }
   document.getElementById('detailOverlay').classList.add('open');
+  const sheet=document.getElementById('detailOverlay').querySelector('.sheet');if(sheet)sheet.scrollTop=0;
 }
 function jumpToAnken(){
   const cur=entries.find(x=>String(x.id)===String(detailId));
-  if(!cur||!cur.data||!cur.data.anken)return;
-  const t=entries.find(x=>x.cat==='anken'&&!x.arch&&ankenLabel(x)===cur.data.anken)
-    ||entries.find(x=>x.cat==='anken'&&ankenLabel(x)===cur.data.anken);
-  if(!t){toastErr('紐づく案件が見つかりません(案件の内容や相手方が後から変わった可能性があります)');return}
+  const t=cur&&linkedAnken(cur.data||{});
+  if(!t){toastErr('紐づく案件を特定できません。編集画面で案件を選び直してください');return}
   openDetail(t.id);
 }
 function closeDetail(){document.getElementById('detailOverlay').classList.remove('open')}
@@ -2939,7 +3274,7 @@ function entryText(e){
     if(f.type==='photos'){if(Array.isArray(v)&&v.length)lines.push('写真: '+v.length+'枚');return}
     if(v===''||v===undefined||v===null)return;
     if(Array.isArray(v)){if(!v.length)return;v=v.join('、')}
-    if(f.type==='amount')v=fmtAmt(v);
+    if(f.type==='amount'||f.type==='yen')v=fmtAmt(v);
     if(f.type==='minutes')v=fmtMin(v);
     if(f.type==='seconds')v=v+'秒';
     if(f.type==='date6o')v=iso6(v)||v;
@@ -2959,6 +3294,8 @@ function editOne(){
   guardLeave(()=>{
     activeCat=e.cat;editingId=e.id;
     renderTabs();renderFields(e.data);closeDetail();
+    const parent=linkedAnken(e.data||{});
+    if(parent&&['pf','seikyu'].includes(e.cat)){formReturnAnkenId=parent.id;paintMemoReturn()}
     window.scrollTo({top:0});
     toast('修正して保存してください');
   });
